@@ -12,9 +12,13 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
+    implementation(project(":storage"))
+    implementation(project(":messaging"))
     compileOnly(libs.velocity.api)
+    // Runs the velocity-api annotation processor, which reads @Plugin at compile time
+    // and writes the plugin descriptor (id/name/version/...) into the jar.
     annotationProcessor(libs.velocity.api)
-    // Cloud для velocity бандлится: прокси его не предоставляет.
+    // Cloud for velocity: brings the Velocity binding plus cloud-core.
     implementation(libs.cloud.velocity)
 }
 
@@ -29,44 +33,59 @@ tasks {
 
     named<ShadowJar>("shadowJar") {
         archiveClassifier.set("")
-        archiveBaseName.set("multiloader-template-velocity")
-        // Склеиваем META-INF/services всех либ (Configurate, Cloud), иначе SPI провайдеры потеряются.
+        archiveBaseName.set("continuum-velocity")
+        // Merge META-INF/services from all bundled jars (Configurate, Cloud, MongoDB
+        // driver registration), otherwise the SPI files silently overwrite each other.
         mergeServiceFiles()
-        // Без этого Shadow 9.x режет дубликаты service-файлов до того как их увидит
-        // трансформер (ворнинг при сборке) — провайдеры Configurate/Cloud теряются.
-        // Приём у milkdrinkers (фикс service file merging): дубликаты пропускаем
-        // внутрь, склейкой занимается сам трансформер.
+        // See paper/build.gradle.kts for the shared relocation rules — both platform jars
+        // use the same set: relocate bundled third-party code except the JDBC/MongoDB
+        // drivers (resolved by class name via DriverManager/ServiceLoader) and the
+        // platform-provided libraries (Adventure, jspecify, slf4j — excluded below).
         filesMatching("META-INF/services/**") {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE
         }
-        // Всё своё тащим под своим пакетом, чтобы не конфликтовать с другими плагинами.
-        relocate("org.spongepowered.configurate", "kz.bejiihiu.template.libs.configurate")
-        relocate("org.yaml.snakeyaml", "kz.bejiihiu.template.libs.snakeyaml")
-        relocate("io.leangen.geantyref", "kz.bejiihiu.template.libs.geantyref")
-        relocate("org.incendo.cloud", "kz.bejiihiu.template.libs.cloud")
+        relocate("org.spongepowered.configurate", "lol.candyriya.continuum.libs.configurate")
+        relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
+        relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
+        relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
+        relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
+        relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
+        relocate("io.netty", "lol.candyriya.continuum.libs.netty")
+        relocate("com.google.protobuf", "lol.candyriya.continuum.libs.protobuf")
+        relocate("net.kyori.option", "lol.candyriya.continuum.libs.option")
+        relocate("tools.jackson", "lol.candyriya.continuum.libs.jackson")
+        relocate("com.fasterxml.jackson", "lol.candyriya.continuum.libs.jackson")
         dependencies {
-            // Даёт прокси (Velocity 4 везёт Adventure 5): Adventure, slf4j и аннотации в jar не кладём.
-            exclude(dependency("net.kyori:.*:.*"))
+            // Velocity 4 ships Adventure 5: keep the platform-provided kyori modules out of the jar.
+            // (net.kyori:option is NOT provided and is bundled — configurate needs it.)
+            exclude(dependency("net.kyori:adventure-api:.*"))
+            exclude(dependency("net.kyori:adventure-key:.*"))
+            exclude(dependency("net.kyori:adventure-text-minimessage:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-plain:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-gson:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-legacy:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-ansi:.*"))
+            exclude(dependency("net.kyori:adventure-text-logger-slf4j:.*"))
+            exclude(dependency("org.jspecify:jspecify:.*"))
             exclude(dependency("org.slf4j:.*:.*"))
             exclude(dependency("org.jetbrains:annotations:.*"))
         }
     }
 }
 
-// Версия проксируется в BuildConstants до компиляции, чтобы @Plugin видел константу.
-// Механика один в один как в одиночном velocity-шаблоне, путь только под новый пакет.
-val templateSource = file("src/main/templates")
-val templateDest = layout.buildDirectory.dir("generated/sources/templates")
-val generateTemplates = tasks.register<Copy>("generateTemplates") {
-    // Комменты в шаблоне только ASCII: expand() читает файл в кодировке платформы,
-    // не-ASCII превращается в кракозябры независимо от filteringCharset.
+// Inject the version into BuildConstants before compilation so @Plugin does not hardcode it.
+// The constants file itself stays ASCII: expand() mangles anything else,
+// and this file is a Velocity-plugin descriptor input, not prose.
+val constantsSource = file("src/main/templates")
+val constantsDest = layout.buildDirectory.dir("generated/sources/templates")
+val generateBuildConstants = tasks.register<Copy>("generateBuildConstants") {
     filteringCharset = "UTF-8"
     val props = mapOf("version" to project.version)
     inputs.properties(props)
 
-    from(templateSource)
-    into(templateDest)
+    from(constantsSource)
+    into(constantsDest)
     expand(props)
 }
 
-sourceSets.main.configure { java.srcDir(generateTemplates.map { it.outputs }) }
+sourceSets.main.configure { java.srcDir(generateBuildConstants.map { it.outputs }) }

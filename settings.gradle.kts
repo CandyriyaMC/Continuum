@@ -1,10 +1,10 @@
 plugins {
-    // Резолвер JDK для тулчейнов через Foojay: без convention-плагина резолвер
-    // не регистрируется и Gradle качает JDK авто-провижинингом (deprecated в 9.x,
-    // в 10.x станет ошибкой). Как у milkdrinkers: именно -convention вариант.
+    // JDK resolver for toolchains via Foojay: without the convention plugin the
+    // resolver is not registered and Gradle falls back to auto-provisioning
+    // (deprecated in 9.x, an error in 10.x). The -convention variant is the one to use.
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-rootProject.name = "multiloader-template"
+rootProject.name = "continuum"
 
-include("common", "api", "paper", "velocity")
+include("api", "common", "storage", "messaging", "paper", "velocity")

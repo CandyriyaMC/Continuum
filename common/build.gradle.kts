@@ -5,26 +5,29 @@ repositories {
 dependencies {
     api(project(":api"))
 
-    // Adventure идёт через api: типы Component торчат в публичных сигнатурах.
-    // В рантайме его дают сами платформы, из shade-бандлов группа net.kyori вырезается.
+    // Adventure goes as api: Component signatures appear in this module's public API.
+    // Both platforms provide Adventure at runtime, and the shade bundles exclude net.kyori.
     api(libs.adventure.api)
     api(libs.adventure.minimessage)
 
-    // Cloud-ядро идёт через api: CommandManager сидит в сигнатуре TemplateCommands.register.
-    // Релокация в shade переписывает и наши ссылки тоже, так что рассинхрона не будет.
+    // Cloud core as api: CommandManager sits in the signature of ContinuumCommands.register.
+    // Kept out of the shade set (relocated instead), so it stays out of the exploded jar too.
     api(libs.cloud.core)
 
-    // Configurate бандлится в каждый платформенный jar с релокацией, транзитивно тянет snakeyaml.
+    // Configurate is bundled into the platform jars with relocation, pulling in snakeyaml.
     implementation(libs.configurate.yaml)
-    // Plain-сериализатор для strip(): в сигнатурах не торчит, поэтому implementation.
+    // Plain serializer for strip(): not part of the public API, so implementation is enough.
     implementation(libs.adventure.plain)
+    // Jackson 3 for snapshot (de)serialization. Bundled and relocated in the platform jars.
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
 
     compileOnly(libs.slf4j.api)
     compileOnly(libs.annotations)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
-    // Лаунчер нужен Gradle раннеру, сам junit-jupiter его не тянет.
+    // Gradle 9 needs the launcher explicitly, junit-jupiter no longer brings it along.
     testRuntimeOnly(libs.junit.launcher)
     testImplementation(libs.configurate.yaml)
     testImplementation(libs.slf4j.simple)

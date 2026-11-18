@@ -1,5 +1,5 @@
-// Общие конвенции для всех модулей: Java, кодировка, тесты.
-// Платформенные тонкости (shade, раннеры) живут в build-файлах самих модулей.
+// Shared conventions for all modules: Java, encoding, tests.
+// Platform specifics (shade, run tasks) live in the module build files themselves.
 import org.gradle.api.plugins.JavaPluginExtension
 
 subprojects {
@@ -9,9 +9,9 @@ subprojects {
     version = rootProject.version
 
     extensions.configure<JavaPluginExtension> {
-        // Единый тулчейн 25 на все модули: paper-api 26.x и velocity-api 4.x
-        // скомпилированы под 25, javac младшей версии их классы даже прочитать не может.
-        // Недостающий JDK Gradle докачивает сам через Foojay-резолвер из settings.gradle.kts.
+        // One toolchain (25) for every module: paper-api 26.x and velocity-api 4.x
+        // are built for 25, older javac cannot even read their class files.
+        // A missing JDK is downloaded automatically via the Foojay resolver from settings.gradle.kts.
         toolchain.languageVersion = JavaLanguageVersion.of(25)
     }
 

@@ -10,10 +10,25 @@ repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
 }
 
+configurations.all {
+    // paper-api and folia-api both ship the bukkit capability; Gradle refuses to pick one
+    // on its own. Both provide the same 26.3 API surface (folia-api is the Folia fork),
+    // so selectHighestVersion just resolves it deterministically and stays correct as builds bump.
+    // Folia-specific behavior is reached via the same scheduler API Paper exposes, not via extra classes.
+    resolutionStrategy.capabilitiesResolution.withCapability("org.bukkit:bukkit") {
+        selectHighestVersion()
+    }
+}
+
 dependencies {
     implementation(project(":common"))
+    implementation(project(":storage"))
+    implementation(project(":messaging"))
     compileOnly(libs.paper.api)
-    // Cloud для paper бандлится: платформы его не предоставляют.
+    // Folia API is the same surface with the regionized scheduler types. compileOnly:
+    // Paper and Folia both provide the API at runtime, we must not bundle either one.
+    compileOnly(libs.folia.api)
+    // Cloud for paper: brings the Paper/Brigadier binding plus cloud-core.
     implementation(libs.cloud.paper)
 }
 
@@ -28,9 +43,8 @@ tasks {
     }
 
     processResources {
-        // filteringCharset выставлен, но на expand() он не влияет (проверено:
-        // кириллица всё равно бьётся). Правило простое: через expand гоняем
-        // только ASCII (версию), весь не-ASCII лежит в yml литералом.
+        // filteringCharset is required, but expand() must not be relied on for anything
+        // beyond plain ASCII: Gradle reads that source file in the platform encoding otherwise.
         filteringCharset = "UTF-8"
         val props = mapOf("version" to version)
         filesMatching("paper-plugin.yml") {
@@ -40,24 +54,57 @@ tasks {
 
     named<ShadowJar>("shadowJar") {
         archiveClassifier.set("")
-        archiveBaseName.set("multiloader-template-paper")
-        // Склеиваем META-INF/services всех либ (Configurate, Cloud), иначе SPI провайдеры потеряются.
+        archiveBaseName.set("continuum-paper")
+        // Merge META-INF/services from all bundled jars (Configurate, Cloud, MongoDB
+        // driver registration), otherwise the SPI files silently overwrite each other.
         mergeServiceFiles()
-        // Без этого Shadow 9.x режет дубликаты service-файлов до того как их увидит
-        // трансформер (ворнинг при сборке) — провайдеры Configurate/Cloud теряются.
-        // Приём у milkdrinkers (фикс service file merging): дубликаты пропускаем
-        // внутрь, склейкой занимается сам трансформер.
+        // In Shadow 9.x, service files merged by mergeServiceFiles are rewritten to the
+        // relocated names as well, but a same-name collision between a relocated and a
+        // non-relocated jar still picks one — so keep the duplicatesStrategy as in the
+        // Same-name entries are kept, not dropped: both relocated and bundled service
+        // files land in the jar side by side and the duplicates strategy includes them.
         filesMatching("META-INF/services/**") {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE
         }
-        // Всё своё тащим под своим пакетом, чтобы не конфликтовать с другими плагинами.
-        relocate("org.spongepowered.configurate", "kz.bejiihiu.template.libs.configurate")
-        relocate("org.yaml.snakeyaml", "kz.bejiihiu.template.libs.snakeyaml")
-        relocate("io.leangen.geantyref", "kz.bejiihiu.template.libs.geantyref")
-        relocate("org.incendo.cloud", "kz.bejiihiu.template.libs.cloud")
+        // Relocation set (bundled third-party code, relocated to lol.candyriya.continuum.libs.*):
+        //   configurate / snakeyaml / geantyref — config loading, implementation detail
+        //   cloud (org.incendo)                — command framework
+        //   hikari                             — a pool, class names are ours to pick
+        //   rabbitmq (com.rabbitmq)            — AMQP client
+        //   netty (io.netty)                   — AMQP client's transport; both platforms ship their own netty, never clash
+        //   protobuf (com.google.protobuf)      — pulled in by mysql-connector-j for the X DevAPI
+        //   option (net.kyori.option)          — configurate-core needs it, the platforms do NOT provide it
+        //   jackson (tools.jackson + com.fasterxml.jackson.annotation) — MUST not leak, other plugins bundle it too
+        // Never relocated (class names are part of the resolution contract):
+        //   net.kyori.adventure*.*, adventure-key — both platforms provide these at runtime (excluded from the jar below)
+        //   org.jspecify:jspecify              — annotations-only, provided by both platforms
+        //   org.slf4j.*, org.jetbrains.*       — provided by the platform / compileOnly, excluded from the jar
+        //   JDBC drivers: com.mysql, org.mariadb.jdbc — DriverManager resolves by class name
+        //   MongoDB driver: org.bson, com.mongodb     — registers via META-INF/services with its own class names
+        //   kotlin/coroutines — nothing bundles them today; if something does, those stay unrelocated
+        relocate("org.spongepowered.configurate", "lol.candyriya.continuum.libs.configurate")
+        relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
+        relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
+        relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
+        relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
+        relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
+        relocate("io.netty", "lol.candyriya.continuum.libs.netty")
+        relocate("com.google.protobuf", "lol.candyriya.continuum.libs.protobuf")
+        relocate("net.kyori.option", "lol.candyriya.continuum.libs.option")
+        relocate("tools.jackson", "lol.candyriya.continuum.libs.jackson")
+        relocate("com.fasterxml.jackson", "lol.candyriya.continuum.libs.jackson")
         dependencies {
-            // Даёт сервер: Adventure, slf4j и аннотации в jar не кладём.
-            exclude(dependency("net.kyori:.*:.*"))
+            // Adventure is provided by Paper — keep the platform-provided kyori modules out of the jar.
+            // (net.kyori:option is NOT provided and is bundled — configurate needs it.)
+            exclude(dependency("net.kyori:adventure-api:.*"))
+            exclude(dependency("net.kyori:adventure-key:.*"))
+            exclude(dependency("net.kyori:adventure-text-minimessage:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-plain:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-gson:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-legacy:.*"))
+            exclude(dependency("net.kyori:adventure-text-serializer-ansi:.*"))
+            exclude(dependency("net.kyori:adventure-text-logger-slf4j:.*"))
+            exclude(dependency("org.jspecify:jspecify:.*"))
             exclude(dependency("org.slf4j:.*:.*"))
             exclude(dependency("org.jetbrains:annotations:.*"))
         }
