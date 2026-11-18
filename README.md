@@ -22,29 +22,40 @@ Continuum is free software, licensed under the
 The full source code is here for everyone — build it yourself for free, that's the whole
 point of the license.
 
-That said, a word from a real person:
+And since this is a real person writing this, not a corporation:
 
 - **Self-builders ride free.** If you're comfortable running `./gradlew build`, you never
   have to pay a cent. That's not a loophole, that's the deal.
-- **$3.99 keeps the lights on.** Once sales are set up, a ready-made build plus support
-  and updates will cost about four dollars. Think of it as the price of a coffee with
-  worse breath — the build won't judge you at 3 AM when the inventory didn't desync.
-- **Can't afford it? Ask nicely.** If you're short on money or just need a hand getting
-  things working, ping [@foliaxs](https://t.me/foliaxs) on Telegram and ask. If you ask
-  like a human being, there's a very good chance you get help for free. I'm a student,
-  not a corporation.
-- **Please don't run "leaked" builds.** If you stumble upon a cracked copy of this plugin
-  somewhere, please don't install it. I can't verify what's been changed inside it, your
-  servers deserve better than a mystery jar, and honestly it's just a worse experience
-  than building from source — which takes five minutes and always works.
-- **What your $4 does:** it buys me a few days of food and a few evenings of development
-  time. Not much, but it's real, and it makes this project exist instead of being another
-  dusty repo. So yeah — four dollars, and you live happily with the latest build, fast
-  support and updates. I win, you win, everybody wins.
+- **But maybe you just want the jar?** Say you run a server — fifty, sixty players, a real
+  community — and the last thing you want to do after a long day is fight a Gradle build.
+  Totally understandable. Write to [@foliaxs](https://t.me/foliaxs) on Telegram, be a human,
+  say something like "hey, I'd love to use this but I can't afford it right now — could you
+  spare the jar?", and there's a very good chance you walk away with the jar and a smile.
+  I'll be genuinely glad that you trusted me with your server.
+- **Need a fix?** Same story. Ask like a civilized person — "could you please look at this,
+  here's the log" — and I'll happily dig in and fix whatever is actually broken. The only
+  mode that doesn't work is "эй, fix this garbage" delivered with the assumption that I'm
+  an unpaid on-call dev for your server. I'm not. But a friendly ask works wonders.
+- **The $3.99 is a tip jar, not a toll booth.** Once sales are set up, a ready-made build
+  plus support and updates will cost about four dollars. If you pay it, you get the jar,
+  updates and my attention — and a very happy student who can eat for a few days. If you
+  don't, you get exactly the same plugin, because it's AGPL and I'm not interested in
+  holding functionality hostage.
+- **Either way, please don't run "leaked" builds.** If you find a cracked copy of this
+  plugin floating around, do not install it. I can't verify what's inside it, and neither
+  can you. Building from source takes five minutes and always works — that's the honest
+  path.
+- **What the $4 buys me:** a few days of food and a few evenings of development instead of
+  staring at my account balance deciding whether coffee is a luxury today. Not much. But
+  it's real, and it's the reason this project exists.
 
-No corporate hotlines, no twenty-tier pricing pages — just a student, a chat, and four
-dollars well spent. If you want to support the project beyond that, you know where to
-find me.
+So: build it, ask me, throw a few dollars my way if you feel like it — whatever works for
+you. Just don't install mystery jars from the internet, your players deserve better
+(you deserve better too).
+
+No corporate hotlines, no "enterprise" tier, no twenty-page pricing table. Just a student,
+a Telegram chat, and however many dollars you're comfortable with — or zero, and that's
+fine too.
 
 ## Links
 
