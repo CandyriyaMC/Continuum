@@ -3,6 +3,7 @@ package lol.candyriya.continuum.velocity;
 import lol.candyriya.continuum.common.config.ConfigLoader;
 import lol.candyriya.continuum.common.config.ContinuumConfig;
 import lol.candyriya.continuum.common.i18n.Translator;
+import lol.candyriya.continuum.velocity.integrations.metrics.VelocityMetricsService;
 import lol.candyriya.continuum.velocity.license.LicenseService;
 import lol.candyriya.continuum.velocity.license.NotConfiguredLicenseService;
 import lol.candyriya.continuum.velocity.messaging.BackendMessenger;
@@ -44,9 +45,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * values (config, locales) are read through a single volatile {@link GraphSnapshot}
  * reference, so no call site ever observes a half-new graph.</p>
  *
- * <p>Metrics are a slot on purpose: nothing exports them yet, and the NOOP
- * default keeps the hot paths allocation-free until a real provider is
- * wired in.</p>
+ * <p>Metrics are a slot on purpose: the internal {@link Metrics} seam the hot paths
+ * write to stays NOOP until a real provider is wired in. The optional bStats
+ * exporter lives in {@code integrations.metrics} and is wired here via explicit
+ * construction — it is inert until the service id is set at first release, and
+ * always opt-out.</p>
  */
 public final class VelocityServices implements AutoCloseable {
 
@@ -69,6 +72,7 @@ public final class VelocityServices implements AutoCloseable {
     private final NetworkSessionRegistry registry;
     private final SessionTokenSource tokenSource;
     private final Metrics metrics;
+    private final VelocityMetricsService metricsService;
     private final LicenseService licenseService;
     private final KickDecisionPolicy kickPolicy;
     private final VelocityMessages messages;
@@ -87,6 +91,7 @@ public final class VelocityServices implements AutoCloseable {
                              NetworkSessionRegistry registry,
                              SessionTokenSource tokenSource,
                              Metrics metrics,
+                             VelocityMetricsService metricsService,
                              LicenseService licenseService,
                              KickDecisionPolicy kickPolicy,
                              VelocityMessages messages) {
@@ -101,6 +106,7 @@ public final class VelocityServices implements AutoCloseable {
         this.registry = registry;
         this.tokenSource = tokenSource;
         this.metrics = metrics;
+        this.metricsService = metricsService;
         this.licenseService = licenseService;
         this.kickPolicy = kickPolicy;
         this.messages = messages;
@@ -128,6 +134,9 @@ public final class VelocityServices implements AutoCloseable {
 
         AtomicReference<GraphSnapshot> snapshot = new AtomicReference<>(new GraphSnapshot(config, localConfig, translator));
         Metrics metrics = Metrics.NOOP;
+        // metrics service is self-detecting and self-seeding; inert until the bStats id is set at first release
+        VelocityMetricsService metricsService = VelocityMetricsService.createIfEnabled(
+                proxy, plugin, logger, dataDirectory, () -> snapshot.get().config());
         VelocityScheduler scheduler = new VelocityScheduler(proxy, plugin);
         BackendMessenger messenger = new BackendMessenger(logger, metrics,
                 () -> snapshot.get().config().messaging().pluginMessage().maxPayloadBytes());
@@ -143,7 +152,7 @@ public final class VelocityServices implements AutoCloseable {
                 localeResolver);
 
         return new VelocityServices(logger, dataDirectory, classLoader, localesDir, snapshot,
-                scheduler, messenger, router, registry, tokenSource, metrics,
+                scheduler, messenger, router, registry, tokenSource, metrics, metricsService,
                 licenseService, kickPolicy, messages);
     }
 
@@ -250,6 +259,7 @@ public final class VelocityServices implements AutoCloseable {
 
     private void teardownGraph() {
         List<String> failures = new ArrayList<>();
+        closeStep("metrics", metricsService::close, failures);
         closeStep("session registry", registry::close, failures);
         // storage and broker closeables plug in here when they are wired
         if (!failures.isEmpty()) {

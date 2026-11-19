@@ -25,6 +25,10 @@ dependencies {
     // Proxy-local settings (velocity.yml) are loaded with Configurate, same as the shared config.
     implementation(libs.configurate.yaml)
     compileOnly(libs.annotations)
+    // bStats metrics (opt-in, inert until the service id is set in VelocityMetricsService).
+    // Shaded and relocated like every other bundled library — never compileOnly here:
+    // nothing else provides these classes on the classpath at runtime.
+    implementation(libs.bstats.velocity)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
@@ -58,6 +62,7 @@ tasks {
         relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
         relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
         relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
+        relocate("org.bstats", "lol.candyriya.continuum.libs.bstats")
         relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
         relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
         relocate("io.netty", "lol.candyriya.continuum.libs.netty")

@@ -9,9 +9,10 @@ import java.util.Objects;
  * Reserved slot for the metrics integration of this backend.
  *
  * <p>The wiring order in the backend is fixed, and this slot has its place in
- * it so the integration can land without reordering anything else. This build
- * ships no metrics implementation of its own; the metrics provider registers
- * itself here exactly once via {@link #register(AutoCloseable)}.</p>
+ * it so the integration can land without reordering anything else. The
+ * Paper-side metrics integration ({@code integrations.metrics.BukkitMetricsService})
+ * registers here exactly once when the plugin enables — or registers an inert
+ * no-op service when the operator opted out or bStats is not registered yet.</p>
  *
  * <p>One registration per slot, enforced. Registering twice is a bug in the
  * integration, and silencing it would hide configuration mistakes.</p>

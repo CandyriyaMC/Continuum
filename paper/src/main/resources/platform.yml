@@ -6,6 +6,13 @@
 #
 # This file is seeded on first run — your edits are never overwritten.
 
+metrics:
+  # Anonymous bStats usage metrics: server count, version distribution and a few
+  # configuration values (storage engine, restore order, module toggles). No personal
+  # data is ever collected. Set to false to opt out on this node. A global opt-out for
+  # every plugin is also available: plugins/bStats/config.yml -> enabled: false
+  enabled: true
+
 gate:
   # When false the backend admits players without holding them back until their data is
   # restored: players keep vanilla movement and interaction while the load happens in

@@ -8,6 +8,8 @@ plugins {
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    // PlaceholderAPI is only published here; compileOnly, so the jar is never bundled
+    maven("https://repo.helpch.at/releases/")
 }
 
 configurations.all {
@@ -43,6 +45,15 @@ dependencies {
     // compileOnly: we compile against the classes; the jar supplies them at runtime.
     compileOnly(libs.configurate.yaml)
     compileOnly(libs.annotations)
+    // bStats metrics (opt-in, inert until the service id is set in BukkitMetricsService).
+    // Shaded and relocated like every other bundled library — never compileOnly here:
+    // nothing else provides these classes on the classpath at runtime.
+    implementation(libs.bstats.bukkit)
+    // PlaceholderAPI: optional host, compileOnly + runtime detection; not shaded.
+    // Not in the version catalog yet; keep in sync with research-metrics (2.12.3).
+    compileOnly("me.clip:placeholderapi:2.12.3")
+    // tests instantiate the internal expansion against the real API surface
+    testImplementation("me.clip:placeholderapi:2.12.3")
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
@@ -116,6 +127,7 @@ tasks {
         //   MongoDB driver: org.bson, com.mongodb     — registers via META-INF/services with its own class names
         //   kotlin/coroutines — nothing bundles them today; if something does, those stay unrelocated
         relocate("org.spongepowered.configurate", "lol.candyriya.continuum.libs.configurate")
+        relocate("org.bstats", "lol.candyriya.continuum.libs.bstats")
         relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
         relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
         relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")

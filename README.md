@@ -15,6 +15,38 @@ or achievement getting lost.
 
 Currently in active development. See the repository for status and releases.
 
+## Privacy & metrics
+
+Continuum ships with optional, anonymous [bStats](https://bstats.org) metrics. What
+that means, exactly:
+
+- **What is collected** (when metrics are on): the number of servers running the
+  plugin, a version distribution, and three configuration values — the storage
+  engine in use (MySQL/MariaDB/MongoDB), whether a custom restore order is pinned,
+  and which synchronization modules are toggled on or off.
+- **What is never collected:** player names, UUIDs, IP addresses, chat, skins,
+  inventories, locations, or any other personal or player data. Ever. Not hashed,
+  not "anonymized", not at all. The custom charts report fixed configuration values
+  only; bStats itself adds the server count and version distribution.
+- **Not active yet.** The bStats service id is assigned when the plugin is
+  registered on bstats.org at first release. Until that happens, the metrics code
+  in this repository is inert: no HTTP requests of any kind leave the process.
+- **Opting out is always free and always possible.** Per node: set
+  `metrics.enabled: false` in `platform.yml` on Paper backends, or `enabled: false`
+  in `metrics.yml` on the Velocity proxy (that file is seeded with `enabled: true`).
+  For every plugin at once: set `enabled: false` in bStats' global config
+  (`plugins/bStats/config.yml` on Paper, `plugins/bStats/config.txt` on Velocity).
+  Continuum never reads, overrides or works around the global opt-out.
+- **PlaceholderAPI** (optional soft integration on Paper): if you have
+  PlaceholderAPI installed, Continuum registers an internal expansion exposing
+  `%continuum_version%`, `%continuum_modules_enabled%`, `%continuum_role%` and
+  `%continuum_restore_order%` — all derived from the shared configuration or the
+  plugin descriptor, identical for every player, containing nothing personal. If
+  PlaceholderAPI is absent, the integration does nothing and the plugin enables
+  exactly as usual. It is never published to the eCloud store.
+- The full privacy statement for the project's updater and license service lives in
+  the licensing document; the same rules apply there — no player data, no exceptions.
+
 ## License & support
 
 Continuum is free software, licensed under the

@@ -193,9 +193,10 @@ Practical notes on the flow, as designed:
 
 ## Privacy
 
-**Today:** Continuum does not phone home. There is no license check, update
-beacon or metrics code in the current source tree — nothing to disclose,
-nothing to disable.
+**Today:** Continuum does not phone home. There is no license check or update
+beacon in the current source tree. The optional bStats metrics code is present
+but inert: it sends nothing until the plugin is registered on bstats.org at
+first release, it never collects personal data, and it is always opt-out.
 
 **When the updater and license service ship, as designed:**
 
@@ -225,11 +226,16 @@ nothing to disable.
   `upd.candyriya.xsxs.lol` at your firewall without affecting gameplay, and
   builders of the open-source code run the same updater with the same
   controls. There is no second, hidden binary.
-- **bStats.** Anonymous server-count metrics (distinct servers running the
-  plugin, version distribution — no player data) are being considered for a
-  later release, with an explicit opt-out in the config and a disclosure
-  update to this page *before* it ships. As of this writing, it is not
-  present.
+- **bStats.** Anonymous usage metrics (distinct servers running the plugin,
+  version distribution, plus three configuration values: storage engine,
+  whether a custom restore order is pinned, and which synchronization modules
+  are enabled) ship with the plugin as an explicit opt-out integration. No
+  personal data, no player data, ever. Until the plugin is registered on
+  bstats.org at first release, the metrics code sends nothing at all. Opt out
+  per node with `metrics.enabled: false` in `platform.yml` (Paper) or
+  `enabled: false` in `metrics.yml` (Velocity), or for every plugin at once
+  with the global `enabled: false` in `plugins/bStats/config.yml` (Paper)
+  or `plugins/bStats/config.txt` (Velocity).
 
 ## Refunds, chargebacks and abuse
 
