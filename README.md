@@ -1,5 +1,9 @@
 # Continuum
 
+[![build](https://github.com/CandyriyaMC/Continuum/actions/workflows/build.yml/badge.svg?branch=dev)](https://github.com/CandyriyaMC/Continuum/actions/workflows/build.yml)
+[![release](https://img.shields.io/badge/release-master-blue)](https://github.com/CandyriyaMC/Continuum/releases)
+[![license: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
 **Your players should stay *themselves* everywhere.**
 
 Continuum is a distributed, production-grade infrastructure plugin for Minecraft networks.
@@ -14,6 +18,26 @@ or achievement getting lost.
 - RabbitMQ delivers durable, asynchronous events; Plugin Messaging handles fast proxy-backend traffic.
 
 Currently in active development. See the repository for status and releases.
+
+Supported platforms and the always-latest compatibility policy live in
+[docs/compatibility.md](docs/compatibility.md). Ready-made builds are published from
+`master` merges as `build-<N>` releases; see [docs/release.md](docs/release.md) for how
+releases are cut and [docs/licensing.md](docs/licensing.md) for what the free source,
+the $3.99 jar and support each mean for you.
+
+## Documentation
+
+| Doc | What it covers |
+| --- | --- |
+| [docs/installation.md](docs/installation.md) | Deploying Continuum: requirements, Velocity/backend/database setup, checklist |
+| [docs/compatibility.md](docs/compatibility.md) | Supported versions, the CI smoke matrix, support policy |
+| [docs/licensing.md](docs/licensing.md) | The license model, buying, activating, refunds, AGPL terms |
+| [docs/release.md](docs/release.md) | How releases are cut (`dev` → `master`, `build-<N>`, source-only) |
+| [docs/updater.md](docs/updater.md) | The in-plugin updater: protocol, fail-open behavior, key provisioning |
+| [docs/ci-tags.md](docs/ci-tags.md) | Commit tags that shape CI (`[compat skip]`, `[release notes]`, …) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute: builds, tests, branches, commit style |
+| [SECURITY.md](.github/SECURITY.md) | Reporting vulnerabilities privately |
+| [SUPPORT.md](.github/SUPPORT.md) | Where to get help |
 
 ## Privacy & metrics
 
