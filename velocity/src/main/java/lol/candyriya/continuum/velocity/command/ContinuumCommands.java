@@ -7,6 +7,7 @@ import lol.candyriya.continuum.velocity.VelocityMessages;
 import lol.candyriya.continuum.velocity.messaging.ContinuumChannels;
 import lol.candyriya.continuum.velocity.messaging.MessagingHealth;
 import lol.candyriya.continuum.velocity.license.LicenseReport;
+import lol.candyriya.continuum.velocity.update.UpdateMessages;
 
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.proxy.ProxyServer;
@@ -56,7 +57,7 @@ public final class ContinuumCommands {
             new HelpEntry("/continuum license redeem <code>", "velocity.help.desc.license-redeem"),
             new HelpEntry("/continuum license check", "velocity.help.desc.license-check"),
             new HelpEntry("/continuum license reset", "velocity.help.desc.license-reset"),
-            new HelpEntry("/continuum update", "velocity.help.desc.update"));
+            new HelpEntry("/continuum update check|install", "velocity.help.desc.update"));
 
     private record HelpEntry(String command, String descriptionKey) {
     }
@@ -123,8 +124,43 @@ public final class ContinuumCommands {
         manager.command(manager.commandBuilder("continuum")
                 .literal("update")
                 .permission(PERMISSION_UPDATE)
-                .handler(context -> messages.send(context.sender(), "velocity.update.unavailable",
-                        TypedArgument.text("version", BuildConstants.VERSION))));
+                .handler(context -> runUpdate(services, logger, context.sender(), false)));
+
+        manager.command(manager.commandBuilder("continuum")
+                .literal("update")
+                .literal("check")
+                .permission(PERMISSION_UPDATE)
+                .handler(context -> runUpdate(services, logger, context.sender(), false)));
+
+        manager.command(manager.commandBuilder("continuum")
+                .literal("update")
+                .literal("install")
+                .permission(PERMISSION_UPDATE)
+                .handler(context -> runUpdate(services, logger, context.sender(), true)));
+    }
+
+    private static void runUpdate(VelocityServices services, Logger logger, CommandSource source, boolean install) {
+        var updater = services.updateService();
+        if (updater == null) {
+            source.sendMessage(services.messages().prefixed(
+                    net.kyori.adventure.text.Component.text(
+                            "The update subsystem is not available in this build.",
+                            net.kyori.adventure.text.format.NamedTextColor.YELLOW)));
+            return;
+        }
+        source.sendMessage(UpdateMessages.started(services.messages(), install));
+        var future = install ? updater.installNow() : updater.checkNow();
+        future.whenComplete((snapshot, error) -> {
+            if (error != null || snapshot == null) {
+                // the updater never lets this happen; if it does, the answer stays honest
+                logger.error("update {} failed to produce a result", install ? "install" : "check", error);
+                source.sendMessage(services.messages().prefixed(
+                        net.kyori.adventure.text.Component.text("The update check failed; the proxy keeps running.",
+                                net.kyori.adventure.text.format.NamedTextColor.RED)));
+                return;
+            }
+            source.sendMessage(UpdateMessages.outcome(services.messages(), snapshot, install));
+        });
     }
 
     private static void registerExceptionHandlers(VelocityCommandManager<CommandSource> manager,

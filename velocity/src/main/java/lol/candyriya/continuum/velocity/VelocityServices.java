@@ -14,6 +14,7 @@ import lol.candyriya.continuum.velocity.session.NetworkSessionRegistry;
 import lol.candyriya.continuum.velocity.session.NotifyAndKeepWaitPolicy;
 import lol.candyriya.continuum.velocity.session.SessionTokenSource;
 import lol.candyriya.continuum.velocity.session.UnavailableSessionTokenSource;
+import lol.candyriya.continuum.velocity.update.VelocityUpdater;
 
 import org.slf4j.Logger;
 
@@ -35,7 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * The services graph: everything the proxy wires at boot, in one place.
  *
- * <p>Construction order at boot: shared config (seed + load + validate), then
+ * <p>Construction order at boot: the update swap (a pending staged jar is
+ * renamed into place before anything else - velocity cannot do it at boot
+ * like paper), shared config (seed + load + validate), then
  * proxy-local config, then the merged translator, then the stateless-ish
  * services (messenger, registry, license, tokens), then the executors used for
  * teardown. Nothing heavy happens on the init path beyond reading files.</p>
@@ -76,6 +79,7 @@ public final class VelocityServices implements AutoCloseable {
     private final LicenseService licenseService;
     private final KickDecisionPolicy kickPolicy;
     private final VelocityMessages messages;
+    private final VelocityUpdater updateService;
 
     private final AtomicBoolean closed = new AtomicBoolean();
     private final ExecutorService closePool;
@@ -94,7 +98,8 @@ public final class VelocityServices implements AutoCloseable {
                              VelocityMetricsService metricsService,
                              LicenseService licenseService,
                              KickDecisionPolicy kickPolicy,
-                             VelocityMessages messages) {
+                             VelocityMessages messages,
+                             VelocityUpdater updateService) {
         this.logger = logger;
         this.dataDirectory = dataDirectory;
         this.pluginClassLoader = pluginClassLoader;
@@ -110,8 +115,19 @@ public final class VelocityServices implements AutoCloseable {
         this.licenseService = licenseService;
         this.kickPolicy = kickPolicy;
         this.messages = messages;
+        this.updateService = updateService;
         this.closePool = Executors.newFixedThreadPool(1,
                 Thread.ofPlatform().name("continuum-services-close-", 0).daemon(true).factory());
+    }
+
+    /** Swap-aware updater construction; a failure here must never block the proxy's enable. */
+    private static VelocityUpdater createUpdater(Object plugin, Logger logger, Path dataDirectory) {
+        try {
+            return VelocityUpdater.create(plugin, logger, dataDirectory);
+        } catch (Throwable t) {
+            logger.error("update service failed to start; continuum runs normally without it", t);
+            return null;
+        }
     }
 
     /**
@@ -120,6 +136,10 @@ public final class VelocityServices implements AutoCloseable {
      * proxy mis-routed.
      */
     public static VelocityServices create(ProxyServer proxy, Object plugin, Logger logger, Path dataDirectory) {
+        // first thing, before a single file is read: apply a staged update if one is pending.
+        // velocity has no update folder, so the jar is swapped here; the new build starts at the next restart.
+        VelocityUpdater updateService = createUpdater(plugin, logger, dataDirectory);
+
         Path configPath = dataDirectory.resolve("config.yml");
         ConfigLoader.seedIfMissing(configPath);
         ContinuumConfig config = ConfigLoader.load(configPath);
@@ -150,10 +170,18 @@ public final class VelocityServices implements AutoCloseable {
                 () -> snapshot.get().translator(),
                 () -> snapshot.get().config().i18n(),
                 localeResolver);
+        if (updateService != null) {
+            updateService.start();
+        }
 
         return new VelocityServices(logger, dataDirectory, classLoader, localesDir, snapshot,
+<<<<<<< HEAD
                 scheduler, messenger, router, registry, tokenSource, metrics, metricsService,
                 licenseService, kickPolicy, messages);
+=======
+                scheduler, messenger, router, registry, tokenSource, metrics,
+                licenseService, kickPolicy, messages, updateService);
+>>>>>>> feature/updater
     }
 
     /**
@@ -226,6 +254,14 @@ public final class VelocityServices implements AutoCloseable {
         return kickPolicy;
     }
 
+    /**
+     * The updater; commands and diagnostics read its snapshot from here.
+     * May be null when the updater failed to start - callers must handle it.
+     */
+    public VelocityUpdater updateService() {
+        return updateService;
+    }
+
     public Path dataDirectory() {
         return dataDirectory;
     }
@@ -259,7 +295,13 @@ public final class VelocityServices implements AutoCloseable {
 
     private void teardownGraph() {
         List<String> failures = new ArrayList<>();
+<<<<<<< HEAD
         closeStep("metrics", metricsService::close, failures);
+=======
+        if (updateService != null) {
+            closeStep("updater", updateService, failures);
+        }
+>>>>>>> feature/updater
         closeStep("session registry", registry::close, failures);
         // storage and broker closeables plug in here when they are wired
         if (!failures.isEmpty()) {

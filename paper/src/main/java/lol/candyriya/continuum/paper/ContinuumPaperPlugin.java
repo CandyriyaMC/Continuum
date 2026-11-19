@@ -1,8 +1,12 @@
 package lol.candyriya.continuum.paper;
 
 import lol.candyriya.continuum.paper.backend.BackendComposition;
+<<<<<<< HEAD
 import lol.candyriya.continuum.paper.integrations.metrics.BukkitMetricsService;
 import lol.candyriya.continuum.paper.integrations.papi.PlaceholderSupport;
+=======
+import lol.candyriya.continuum.paper.update.PaperUpdater;
+>>>>>>> feature/updater
 
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -20,26 +24,48 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class ContinuumPaperPlugin extends JavaPlugin {
 
     private PaperServices services;
+<<<<<<< HEAD
     private PlaceholderSupport placeholders;
+=======
+    private PaperUpdater updater;
+>>>>>>> feature/updater
 
     @Override
     public void onEnable() {
         this.services = PaperServices.start(this, BackendComposition.Factories.vanilla());
+<<<<<<< HEAD
         // metrics and placeholders are both inert without their hosts; neither can fail the enable
         services.metrics().register(BukkitMetricsService.createIfEnabled(
                 this, getDataFolder().toPath().resolve("platform.yml"), services.config(), getSLF4JLogger()));
         this.placeholders = PlaceholderSupport.start(this, services.config(), getSLF4JLogger());
+=======
+        try {
+            this.updater = PaperUpdater.create(this, getSLF4JLogger(), getDataFolder().toPath());
+            this.updater.start();
+        } catch (Throwable t) {
+            // the updater is an extra, never a prerequisite
+            getSLF4JLogger().error("update service failed to start; continuum runs normally without it", t);
+        }
+>>>>>>> feature/updater
         getSLF4JLogger().info("continuum backend enabled ({})", getServer().getName());
     }
 
     @Override
     public void onDisable() {
+<<<<<<< HEAD
         // unregister the expansion first; the services graph closes metrics via its slot
         if (placeholders != null) {
             placeholders.close();
             placeholders = null;
         }
         // shutdown lifts any held players, closes messaging, storage, channels, scheduler and timers
+=======
+        // updater first (stop network + timers), then the service graph
+        if (updater != null) {
+            updater.close();
+            updater = null;
+        }
+>>>>>>> feature/updater
         if (services != null) {
             services.close();
             services = null;
