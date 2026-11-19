@@ -14,6 +14,9 @@ dependencies {
     // Only the modules this plugin actually compiles against. The rest come in as
     // they are needed; bundles of unused project deps produce misleading jars.
     implementation(project(":common"))
+    // the transfer handshake speaks the shared plugin-message wire contract; without
+    // the codec the proxy cannot drive or answer any of the handoff frames
+    implementation(project(":messaging"))
     compileOnly(libs.velocity.api)
     // Runs the velocity-api annotation processor, which reads @Plugin at compile time
     // and writes the plugin descriptor (id/name/version/...) into the jar.

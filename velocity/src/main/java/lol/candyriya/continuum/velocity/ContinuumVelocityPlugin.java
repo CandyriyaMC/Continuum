@@ -1,6 +1,7 @@
 package lol.candyriya.continuum.velocity;
 
 import lol.candyriya.continuum.velocity.command.ContinuumCommands;
+import lol.candyriya.continuum.velocity.handoff.HandoffEventListener;
 import lol.candyriya.continuum.velocity.messaging.ContinuumChannels;
 import lol.candyriya.continuum.velocity.session.KickContext;
 
@@ -79,6 +80,8 @@ public final class ContinuumVelocityPlugin {
                 ExecutionCoordinator.simpleCoordinator(),
                 SenderMapper.identity());
         ContinuumCommands.register(commands, graph, proxy, logger);
+        // transfer handshake: our listener observes backend frames and drives the handoff lifecycle
+        proxy.getEventManager().register(this, new HandoffEventListener(graph.handoffs(), logger));
 
         var config = graph.config();
         logger.info("Continuum {} ready: node={} network={} role={}",

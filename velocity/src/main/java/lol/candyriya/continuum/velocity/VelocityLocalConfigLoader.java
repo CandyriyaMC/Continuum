@@ -32,7 +32,7 @@ public final class VelocityLocalConfigLoader {
     public static final String FILE_NAME = "velocity.yml";
 
     private static final Set<String> ROOT_KEYS = Set.of("velocity");
-    private static final Set<String> VELOCITY_KEYS = Set.of("reconnect-debounce-seconds");
+    private static final Set<String> VELOCITY_KEYS = Set.of("reconnect-debounce-seconds", "handoff-restore-timeout-seconds");
 
     private VelocityLocalConfigLoader() {
     }
@@ -114,6 +114,7 @@ public final class VelocityLocalConfigLoader {
             }
         }
         long debounce = VelocityTuning.DEFAULT.reconnectDebounceSeconds();
+        long restoreTimeout = VelocityTuning.DEFAULT_RESTORE_TIMEOUT_SECONDS;
         ConfigurationNode velocity = root.node("velocity");
         if (!velocity.virtual()) {
             if (!velocity.isMap()) {
@@ -122,7 +123,7 @@ public final class VelocityLocalConfigLoader {
                 for (Object key : velocity.childrenMap().keySet()) {
                     String name = String.valueOf(key);
                     if (!VELOCITY_KEYS.contains(name)) {
-                        problems.add("velocity.yml: unknown key 'velocity." + name + "' (known: velocity.reconnect-debounce-seconds)");
+                        problems.add("velocity.yml: unknown key 'velocity." + name + "' (known: velocity.reconnect-debounce-seconds, velocity.handoff-restore-timeout-seconds)");
                     }
                 }
                 ConfigurationNode debounceNode = velocity.node("reconnect-debounce-seconds");
@@ -139,12 +140,26 @@ public final class VelocityLocalConfigLoader {
                         }
                     }
                 }
+                ConfigurationNode restoreNode = velocity.node("handoff-restore-timeout-seconds");
+                if (!restoreNode.virtual()) {
+                    Object raw = restoreNode.raw();
+                    if (!(raw instanceof Number)) {
+                        problems.add("velocity.handoff-restore-timeout-seconds: must be an integer number of seconds");
+                    } else {
+                        restoreTimeout = ((Number) raw).longValue();
+                        if (restoreTimeout < VelocityTuning.MIN_RESTORE_TIMEOUT_SECONDS || restoreTimeout > VelocityTuning.MAX_RESTORE_TIMEOUT_SECONDS) {
+                            problems.add("velocity.handoff-restore-timeout-seconds: must be between "
+                                    + VelocityTuning.MIN_RESTORE_TIMEOUT_SECONDS + " and " + VelocityTuning.MAX_RESTORE_TIMEOUT_SECONDS
+                                    + " (got " + restoreTimeout + ")");
+                        }
+                    }
+                }
             }
         }
         if (!problems.isEmpty()) {
             throw new ConfigurationException(problems);
         }
-        return new VelocityLocalConfig(new VelocityTuning(debounce));
+        return new VelocityLocalConfig(new VelocityTuning(debounce, restoreTimeout));
     }
 
     private static String describe(ConfigurateException e) {

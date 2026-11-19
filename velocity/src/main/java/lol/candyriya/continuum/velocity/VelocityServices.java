@@ -6,6 +6,7 @@ import lol.candyriya.continuum.common.i18n.Translator;
 import lol.candyriya.continuum.velocity.integrations.metrics.VelocityMetricsService;
 import lol.candyriya.continuum.velocity.license.LicenseService;
 import lol.candyriya.continuum.velocity.license.NotConfiguredLicenseService;
+import lol.candyriya.continuum.velocity.handoff.HandoffCoordinator;
 import lol.candyriya.continuum.velocity.messaging.BackendMessenger;
 import lol.candyriya.continuum.velocity.messaging.DefaultPluginMessageRouter;
 import lol.candyriya.continuum.velocity.messaging.PluginMessageRouter;
@@ -74,6 +75,7 @@ public final class VelocityServices implements AutoCloseable {
     private final PluginMessageRouter router;
     private final NetworkSessionRegistry registry;
     private final SessionTokenSource tokenSource;
+    private final HandoffCoordinator handoffs;
     private final Metrics metrics;
     private final VelocityMetricsService metricsService;
     private final LicenseService licenseService;
@@ -94,6 +96,7 @@ public final class VelocityServices implements AutoCloseable {
                              PluginMessageRouter router,
                              NetworkSessionRegistry registry,
                              SessionTokenSource tokenSource,
+                             HandoffCoordinator handoffs,
                              Metrics metrics,
                              VelocityMetricsService metricsService,
                              LicenseService licenseService,
@@ -110,6 +113,7 @@ public final class VelocityServices implements AutoCloseable {
         this.router = router;
         this.registry = registry;
         this.tokenSource = tokenSource;
+        this.handoffs = handoffs;
         this.metrics = metrics;
         this.metricsService = metricsService;
         this.licenseService = licenseService;
@@ -170,12 +174,17 @@ public final class VelocityServices implements AutoCloseable {
                 () -> snapshot.get().translator(),
                 () -> snapshot.get().config().i18n(),
                 localeResolver);
+        HandoffCoordinator handoffs = new HandoffCoordinator(logger, metrics, messenger, messages,
+                proxy::getAllServers,
+                () -> snapshot.get().localConfig().handoffRestoreTimeoutSeconds(),
+                () -> snapshot.get().config().sync().transfer().requireSnapshot(),
+                proxy::getPlayer);
         if (updateService != null) {
             updateService.start();
         }
 
         return new VelocityServices(logger, dataDirectory, classLoader, localesDir, snapshot,
-                scheduler, messenger, router, registry, tokenSource, metrics, metricsService,
+                scheduler, messenger, router, registry, tokenSource, handoffs, metrics, metricsService,
                 licenseService, kickPolicy, messages, updateService);
     }
 
@@ -237,6 +246,11 @@ public final class VelocityServices implements AutoCloseable {
         return tokenSource;
     }
 
+    /** The transfer lifecycle orchestrator; see the handoff package. */
+    public HandoffCoordinator handoffs() {
+        return handoffs;
+    }
+
     public Metrics metrics() {
         return metrics;
     }
@@ -290,6 +304,7 @@ public final class VelocityServices implements AutoCloseable {
 
     private void teardownGraph() {
         List<String> failures = new ArrayList<>();
+        closeStep("handoff coordinator", handoffs::close, failures);
         closeStep("metrics", metricsService::close, failures);
         if (updateService != null) {
             closeStep("updater", updateService, failures);

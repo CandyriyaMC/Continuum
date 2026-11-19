@@ -10,3 +10,9 @@ velocity:
   # reconnects inside the window are counted as a reconnect storm and their
   # loss-reconciliation signals are debounced. 1-600.
   reconnect-debounce-seconds: 10
+  # Seconds the proxy waits for the target backend to report the player restored
+  # and resumed after a transfer is connected. If the report never arrives the
+  # player is disconnected with a restore-failure notice rather than left hidden
+  # in a blocked state forever. Also bounds how long a handoff may sit idle in
+  # the pre-restore phases before it is failed out. 1-120.
+  handoff-restore-timeout-seconds: 8
