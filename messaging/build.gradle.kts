@@ -5,6 +5,11 @@ repositories {
 dependencies {
     implementation(project(":common"))
 
+    // Jackson shows up in the public signatures (raw JSON payloads in inbound messages),
+    // so it rides on the compile classpath here. BOM keeps it aligned with :common.
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
+
     // RabbitMQ client. Bundled into the platform jars with relocation (see the paper/velocity shadowJar config).
     implementation(libs.amqp.client)
 
