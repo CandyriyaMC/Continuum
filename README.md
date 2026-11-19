@@ -29,6 +29,8 @@ the $3.99 jar and support each mean for you.
 
 | Doc | What it covers |
 | --- | --- |
+| [docs/development.md](docs/development.md) | Working on Continuum: build composition, tests, local compat smoke |
+| [docs/README.md](docs/README.md) | Index of every document in this folder |
 | [docs/installation.md](docs/installation.md) | Deploying Continuum: requirements, Velocity/backend/database setup, checklist |
 | [docs/compatibility.md](docs/compatibility.md) | Supported versions, the CI smoke matrix, support policy |
 | [docs/licensing.md](docs/licensing.md) | The license model, buying, activating, refunds, AGPL terms |
