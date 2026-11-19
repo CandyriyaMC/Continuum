@@ -175,13 +175,8 @@ public final class VelocityServices implements AutoCloseable {
         }
 
         return new VelocityServices(logger, dataDirectory, classLoader, localesDir, snapshot,
-<<<<<<< HEAD
                 scheduler, messenger, router, registry, tokenSource, metrics, metricsService,
-                licenseService, kickPolicy, messages);
-=======
-                scheduler, messenger, router, registry, tokenSource, metrics,
                 licenseService, kickPolicy, messages, updateService);
->>>>>>> feature/updater
     }
 
     /**
@@ -295,13 +290,10 @@ public final class VelocityServices implements AutoCloseable {
 
     private void teardownGraph() {
         List<String> failures = new ArrayList<>();
-<<<<<<< HEAD
         closeStep("metrics", metricsService::close, failures);
-=======
         if (updateService != null) {
             closeStep("updater", updateService, failures);
         }
->>>>>>> feature/updater
         closeStep("session registry", registry::close, failures);
         // storage and broker closeables plug in here when they are wired
         if (!failures.isEmpty()) {
