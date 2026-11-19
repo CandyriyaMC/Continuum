@@ -72,9 +72,9 @@ messaging:
     # Plugin messaging frames on the channel below (backend <-> velocity).
     enabled: true
     # Lowercase namespaced channel, required by Velocity.
-    channel: continuum:messaging
+    channel: continuum:main
     # Frame size cap in bytes. 1024-65536. Anything larger is dropped before decode.
-    max-payload-bytes: 32768
+    max-payload-bytes: 65536
 
 sync:
   autosave:
