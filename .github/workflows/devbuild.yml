@@ -76,7 +76,18 @@ jobs:
           echo "Computed N=$N (devbuild-$N)"
 
       - name: Build
-        run: ./gradlew build --parallel --stacktrace -Pversion=devbuild-$N
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./gradlew build --parallel --stacktrace -Pversion=devbuild-$N; then
+              echo "build succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "build attempt $attempt failed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "build failed after 3 attempts" >&2
+          exit 1
 
       - name: Build manifest.json
         run: |

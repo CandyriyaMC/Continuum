@@ -164,7 +164,20 @@ jobs:
 
       - name: Build
         if: steps.tags.outputs.skip != 'true'
-        run: ./gradlew build --parallel --stacktrace -Pversion=build-$N --no-configuration-cache
+        # no configuration cache (CI-only property swap) and a short retry loop:
+        # transient maven-central/papermc resolution hiccups must not fail a release
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if ./gradlew build --parallel --stacktrace -Pversion=build-$N --no-configuration-cache; then
+              echo "build succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "build attempt $attempt failed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "build failed after 3 attempts" >&2
+          exit 1
 
       - name: Create annotated tag
         if: steps.tags.outputs.skip != 'true' && steps.tagcheck.outputs.tag_exists == 'false'
