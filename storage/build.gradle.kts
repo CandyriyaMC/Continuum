@@ -4,6 +4,10 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
+    // the storage-side relay claimers implement the messaging-side outbox
+    // contract against the same table the storages write to; storage is the
+    // only module with the drivers, messaging the only one with the contract
+    implementation(project(":messaging"))
 
     // Jackson 3 for modules_json round-tripping (jackson-bom aligns databind/core).
     implementation(platform(libs.jackson.bom))
