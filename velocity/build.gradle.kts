@@ -11,24 +11,24 @@ repositories {
 }
 
 dependencies {
-    implementation(project(":api"))
+    // Only the modules this plugin actually compiles against. The rest come in as
+    // they are needed; bundles of unused project deps produce misleading jars.
     implementation(project(":common"))
-    implementation(project(":storage"))
-    implementation(project(":messaging"))
     compileOnly(libs.velocity.api)
     // Runs the velocity-api annotation processor, which reads @Plugin at compile time
     // and writes the plugin descriptor (id/name/version/...) into the jar.
     annotationProcessor(libs.velocity.api)
+    // Tests implement the platform interfaces (fakes) and run against them.
+    testImplementation(libs.velocity.api)
     // Cloud for velocity: brings the Velocity binding plus cloud-core.
     implementation(libs.cloud.velocity)
+    // Proxy-local settings (velocity.yml) are loaded with Configurate, same as the shared config.
+    implementation(libs.configurate.yaml)
     compileOnly(libs.annotations)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
-    testImplementation(platform(libs.testcontainers.bom))
-    testImplementation(libs.testcontainers)
-    testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.slf4j.simple)
 }
 

@@ -1,0 +1,12 @@
+# Continuum proxy (Velocity) settings. The shared config.yml carries the
+# network-wide knobs every node agrees on; only proxy-local tunables live here.
+#
+# Unknown keys are rejected at load; out-of-range values are rejected with a
+# report listing every violation. Keep secrets out of this file.
+
+velocity:
+  # Seconds after a player's last connect/disconnect for which the next
+  # transition is treated as the same episode instead of a fresh one. Rapid
+  # reconnects inside the window are counted as a reconnect storm and their
+  # loss-reconciliation signals are debounced. 1-600.
+  reconnect-debounce-seconds: 10

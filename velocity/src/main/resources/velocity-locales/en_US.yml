@@ -1,0 +1,69 @@
+# Continuum proxy-side messages (Velocity only). The shared catalog carries the
+# messages used on every node; this overlay adds the proxy-only strings for the
+# admin command surface. MiniMessage format throughout:
+# https://docs.advntr.dev/minimessage/
+# "Args" lists the typed placeholders each message accepts. Argument names match
+# the <tag> in the template; never paste raw input into tags - that is what
+# TypedArgument.text is for.
+
+velocity:
+  # Prepended to command output from the proxy. Contains the bracket tag on purpose;
+  # deployments can restyle it, but it should stay short and visible.
+  prefix: "<gold>[Continuum]</gold> "
+  help:
+    # Args: version (text) - the running Continuum build
+    header: "<gold>Continuum <version></gold> <gray>- available commands</gray>"
+    # Args: command (text) - the full command path, description (text) - one line
+    entry: "<yellow><command></yellow> <gray>-</gray> <white><description></white>"
+    desc:
+      help: "Show this help."
+      version: "Show the running Continuum and Velocity versions."
+      reload: "Re-read and validate the configuration, then reload the locales."
+      status: "Show registered backends, current connections and messaging health."
+      license: "Manage the Continuum license."
+      license-redeem: "Redeem a license code."
+      license-check: "Show the current license state."
+      license-reset: "Clear locally registered license state."
+      update: "Check whether a Continuum update is available."
+  # Args: version (text) - the running Continuum build, velocity (text) - the Velocity version
+  version: "<gray>Running</gray> <gold>Continuum <version></gold> <gray>on Velocity <velocity></gray>"
+  update:
+    # Args: version (text)
+    unavailable: "<yellow>Update checks are not available in this build. You are running Continuum <version>.</yellow>"
+  status:
+    header: "<gold>Continuum status</gold>"
+    # Args: network (text) - network id, server (text) - this node's id, role (text) - this node's role
+    node: "<gray>Node:</gray> <white><server></white> <gray>(<network>, <role>)</gray>"
+    # Args: count (number)
+    backends-header: "<gray>Registered backends (<count>):</gray>"
+    # Args: name (text) - backend name, address (text) - configured address, connections (number)
+    backend-entry: "<yellow><name></yellow> <gray>(<address>) -</gray> <white><connections></white> <gray>connection(s)</gray>"
+    backend-empty: "<gray>No backends registered. Check velocity.toml.</gray>"
+    # Args: count (number)
+    online: "<gray>Players connected through this proxy:</gray> <white><count></white>"
+    # Args: count (number)
+    awaiting: "<gray>Connections awaiting a backend outcome:</gray> <yellow><count></yellow>"
+    # Args: seconds (number)
+    debounce: "<gray>Reconnect debounce:</gray> <white><seconds>s</white>"
+    messaging-header: "<gray>Messaging:</gray>"
+    # Args: channel (text) - channel id, state (text) - enabled/disabled, max (number) - byte cap
+    messaging-channel: "<gray>channel:</gray> <white><channel></white> <gray>(<state>, max frame <max> bytes)</gray>"
+    # Args: count (number) - frames accepted from backends, last (text) - time of the last frame
+    messaging-traffic: "<gray>frames from backends:</gray> <white><count></white> <gray>last:</gray> <white><last></white>"
+    messaging-never: "never"
+    # Args: seconds (number)
+    last-ago: "<seconds>s ago"
+    messaging-enabled: "enabled"
+    messaging-disabled: "disabled"
+  license:
+    unavailable: "<yellow>License support is not configured in this build yet. Continuum runs free; there is nothing to activate.</yellow>"
+    invalid-code: "<red>That license code cannot be redeemed here. Double-check it and try again.</red>"
+    reset-ok: "<green>License state reset.</green>"
+    error: "<red>Something went wrong while contacting the license service. Try again in a moment.</red>"
+  error:
+    no-permission: "<red>You do not have permission to run this command.</red>"
+    # Args: usage (text) - the expected command syntax
+    usage: "<red>Usage:</red> <white><usage></white>"
+    # Args: argument (text) - the argument that failed to parse
+    argument: "<red>Invalid value for <argument>.</red>"
+    internal: "<red>Something went wrong. The error has been logged.</red>"

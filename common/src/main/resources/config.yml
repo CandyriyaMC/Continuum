@@ -18,7 +18,8 @@ network:
   id: main-network
   # This node's unique id inside the network. Same charset as id.
   server-id: survival-1
-  # backend (Paper/Folia — holds player state) or coordinator (Velocity — routes transfers).
+  # backend (Paper/Folia - holds player state) or coordinator (Velocity - routes transfers).
+  # Velocity deployments MUST change role to coordinator, or the coordinator wakes up thinking it is a backend.
   role: backend
 
 database:
