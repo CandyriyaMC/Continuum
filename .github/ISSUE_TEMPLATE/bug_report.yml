@@ -1,0 +1,100 @@
+name: Bug report
+description: Report reproducible broken behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Two quick favors first: search [existing issues](https://github.com/CandyriyaMC/Continuum/issues) and [Discussions](https://github.com/CandyriyaMC/Continuum/discussions) — your problem may already be tracked or answered — and if anything about this could be a security issue, **stop here and report it privately** via the [security policy](https://github.com/CandyriyaMC/Continuum/security/policy) instead.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and Discussions and this is not a duplicate
+          required: true
+        - label: This is not a security vulnerability (those go through the private security policy)
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Walk us through it, smallest reliable case first.
+      placeholder: |
+        1. Set up a Paper 26.3 server with Continuum ...
+        2. Switch a player from the lobby to survival ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Closest match — we'll apply the matching `area:*` label during triage. Pick "Not sure" if in doubt.
+      multiple: true
+      options:
+        - area:api
+        - area:common
+        - area:storage
+        - area:messaging
+        - area:paper
+        - area:velocity
+        - area:sync
+        - area:ci
+        - area:docs
+        - area:release
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Paper
+        - Folia
+        - Velocity
+        - Paper and Folia
+        - Both platforms (backend and proxy)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS:
+        - Java version:
+        - Platform and version (e.g. Paper 26.3, Folia 26.3, Velocity 4.2.0):
+        - Continuum version (release tag or build):
+        - Database (MySQL / MariaDB / MongoDB and version):
+        - RabbitMQ (version, if used):
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and console output
+      description: Paste relevant stack traces and plugin output. **Redact anything private first** — passwords, tokens, connection strings, player UUIDs you don't want public.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Config snippets (redacted), screenshots, timing details, how often it happens.

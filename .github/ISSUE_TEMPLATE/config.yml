@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/CandyriyaMC/Continuum/discussions
+    about: Ask usage questions, share ideas and showcases in Discussions — issues are for reproducible bugs and concrete feature requests.
+  - name: Community Discord
+    url: https://discord.gg/fXwN4wETF9
+    about: Chat with other CandyriyaMC users and the maintainer.
+  - name: Security reports
+    url: https://github.com/CandyriyaMC/Continuum/security/policy
+    about: Never file security issues publicly — report privately via the security policy.
+  - name: Support guide
+    url: https://github.com/CandyriyaMC/Continuum/blob/master/.github/SUPPORT.md
+    about: Where to go for help, fastest first — docs, Discussions and the free vs. paid support model.

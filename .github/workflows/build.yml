@@ -2,25 +2,36 @@ name: build
 
 on:
   push:
-    # dev собираем тоже: релизы готовятся там, ломать его втихаря нельзя
+    # dev gets built too: releases are prepared there,
+    # breaking it quietly is not an option
     branches: [main, master, dev]
+  # Fork PRs run read-only with the workflow's token — no secrets, no write access
   pull_request:
+
+# Cancel superseded runs on the same ref — no point building stale commits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # JDK 25 основной: все модули собираются тулчейном 25.
-      # (Foojay-резолвер докачает его и сам, но в CI быстрее ставить нужный сразу.)
+      # Toolchain is Java 25 across all modules; setup-java puts the right one on PATH.
+      # (The Gradle toolchain resolver would download it anyway, but installing it
+      # here is faster and matches the toolchain spec.)
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
       - uses: gradle/actions/setup-gradle@v6
       - name: Build and test
-        # --parallel явно: модули независимые, пусть собираются рядом.
-        # (В gradle.properties тоже стоит org.gradle.parallel=true, это дубль для ясности.)
+        # --parallel on purpose: modules are independent, let them build side by side
+        # (gradle.properties already sets org.gradle.parallel=true; this just makes it explicit)
         run: ./gradlew build --parallel --stacktrace
       - name: Upload jars
         uses: actions/upload-artifact@v7

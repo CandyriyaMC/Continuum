@@ -1,7 +1,7 @@
 name: release
 
-# Релиз по тегу vX.Y.Z. Версию в gradle.properties подними заранее,
-# тег обязан совпадать: v1.2.3 при version=1.2.3.
+# Release on a vX.Y.Z tag push. The version in gradle.properties is the source of
+# truth — bump it before tagging and keep the tag in sync (v1.2.3 for version 1.2.3).
 on:
   push:
     tags: ["v*"]

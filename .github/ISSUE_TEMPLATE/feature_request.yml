@@ -1,0 +1,74 @@
+name: Feature request
+description: Suggest new functionality or an improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Before writing it up, please check [existing issues](https://github.com/CandyriyaMC/Continuum/issues) and [Discussions](https://github.com/CandyriyaMC/Continuum/discussions) — your idea may already be tracked, or the answer may be a config option you haven't found yet.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and Discussions and this is not a duplicate
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't you do today, and why does it matter? The more concrete the pain, the easier it is to judge the request.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: What would you like to see? Be as concrete as you can — API sketches, config examples, command syntax.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed, or existing plugins/configs that almost solve this.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Closest match — we'll apply the matching `area:*` label during triage. Pick "Not sure" if in doubt.
+      multiple: true
+      options:
+        - area:api
+        - area:common
+        - area:storage
+        - area:messaging
+        - area:paper
+        - area:velocity
+        - area:sync
+        - area:ci
+        - area:docs
+        - area:release
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of the stack?
+      options:
+        - Backend (Paper / Folia)
+        - Proxy (Velocity)
+        - Shared core / both
+        - Database and messaging layer
+        - Docs and tooling
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd like to work on this myself — tag it `help wanted` or `good first issue` so others can pick it up too
