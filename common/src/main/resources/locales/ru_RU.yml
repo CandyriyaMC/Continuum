@@ -50,7 +50,7 @@ transfer:
   # Args: server (text)
   completed: "<green>Добро пожаловать на <server>."
   # Перенос отменён до коммита; игрок остаётся на исходном сервере.
-  # Args: server (text)
+  # Args: none
   failed: "<red>Переход не удался. Вы останетесь на этом сервере."
 
 admin:

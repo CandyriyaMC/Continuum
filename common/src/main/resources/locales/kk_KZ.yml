@@ -50,7 +50,7 @@ transfer:
   # Args: server (text)
   completed: "<green><server> серверіне қош келдіңіз."
   # Ауысу commit-ге дейін тоқтатылды; ойыншы бастапқы серверде қалады.
-  # Args: server (text)
+  # Args: none
   failed: "<red>Ауысу сәтсіз аяқталды. Сіз осы серверде қаласыз."
 
 admin:

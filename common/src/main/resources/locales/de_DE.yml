@@ -50,7 +50,7 @@ transfer:
   # Args: server (text)
   completed: "<green>Willkommen auf <server>."
   # Transfer vor Commit abgebrochen; der Spieler bleibt auf dem Quellserver.
-  # Args: server (text)
+  # Args: none
   failed: "<red>Der Wechsel ist fehlgeschlagen. Du bleibst auf diesem Server."
 
 admin:

@@ -51,7 +51,7 @@ transfer:
   # Args: server (text)
   completed: "<green>Welcome to <server>."
   # Transfer aborted before commit; player stays on the source.
-  # Args: server (text)
+  # Args: none
   failed: "<red>Transfer failed. You will stay on this server."
 
 admin:

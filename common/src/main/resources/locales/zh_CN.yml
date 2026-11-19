@@ -50,7 +50,7 @@ transfer:
   # Args: server (text)
   completed: "<green>欢迎来到 <server>。"
   # 转移在提交前中止；玩家留在源服务器。
-  # Args: server (text)
+  # Args: none
   failed: "<red>传送失败。你将留在本服务器。"
 
 admin:
