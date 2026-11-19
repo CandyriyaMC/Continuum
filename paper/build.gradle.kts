@@ -11,16 +11,29 @@ repositories {
 }
 
 configurations.all {
-    // paper-api and folia-api both ship the bukkit capability; Gradle refuses to pick one
-    // on its own. Both provide the same 26.3 API surface (folia-api is the Folia fork),
-    // so selectHighestVersion just resolves it deterministically and stays correct as builds bump.
-    // Folia-specific behavior is reached via the same scheduler API Paper exposes, not via extra classes.
+    // paper-api and folia-api both ship the bukkit capability (and, new with the 26-stable
+    // folia line, paper-api's own capability). Gradle refuses to include both in one graph,
+    // so one has to win per capability. Unlock Folia for compile: folia-api is the superset
+    // surface (Paper API + regionized schedulers), so it always takes it; the build numbers
+    // of the two forks drift independently and any fixed comparison would pick wrongly.
+    // Runtime stays identical on both platforms — both provide these APIs.
+    fun selectFolia(details: org.gradle.api.artifacts.CapabilityResolutionDetails) {
+        // candidates do not implement the public ModuleComponentIdentifier in Gradle internals,
+        // so match on the rendered id instead of casting.
+        details.candidates
+            .find { it.id.toString().startsWith("dev.folia:folia-api:") }
+            ?.let { details.select(it) }
+    }
     resolutionStrategy.capabilitiesResolution.withCapability("org.bukkit:bukkit") {
-        selectHighestVersion()
+        selectFolia(this)
+    }
+    resolutionStrategy.capabilitiesResolution.withCapability("com.destroystokyo.paper:paper-api") {
+        selectFolia(this)
     }
 }
 
 dependencies {
+    implementation(project(":api"))
     implementation(project(":common"))
     implementation(project(":storage"))
     implementation(project(":messaging"))
@@ -30,6 +43,15 @@ dependencies {
     compileOnly(libs.folia.api)
     // Cloud for paper: brings the Paper/Brigadier binding plus cloud-core.
     implementation(libs.cloud.paper)
+    compileOnly(libs.annotations)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.launcher)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.slf4j.simple)
 }
 
 tasks {

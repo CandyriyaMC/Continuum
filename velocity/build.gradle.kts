@@ -11,6 +11,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":api"))
     implementation(project(":common"))
     implementation(project(":storage"))
     implementation(project(":messaging"))
@@ -20,6 +21,15 @@ dependencies {
     annotationProcessor(libs.velocity.api)
     // Cloud for velocity: brings the Velocity binding plus cloud-core.
     implementation(libs.cloud.velocity)
+    compileOnly(libs.annotations)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.launcher)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.slf4j.simple)
 }
 
 tasks {

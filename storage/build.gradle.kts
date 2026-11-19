@@ -27,4 +27,5 @@ dependencies {
     testImplementation(libs.testcontainers.mysql)
     testImplementation(libs.testcontainers.mariadb)
     testImplementation(libs.testcontainers.mongodb)
+    testImplementation(libs.slf4j.simple)
 }

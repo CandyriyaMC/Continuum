@@ -1,58 +1,67 @@
-[versions]
-# Platforms. paper-api sets the minimum Paper version for the paper module,
-# velocity-api the minimum Velocity version for the velocity module.
-minecraft = "26.3"
-paper-api = "26.3.build.+"
-# Folia API has the same coordinates and versions as Paper, only the group differs.
-# The 26.3 builds are all -stable now (no 26.3 -beta exists; the -beta line was 26.2).
-# Dynamic reference like paper-api above; resolves to the newest 26.3 build (currently 26.3.build.23-stable).
-folia-api = "26.3.build.+"
-# Velocity 4.2.0 — first stable 4.x release (previously only SNAPSHOTs).
-# Requires Java 25 at runtime, matching our toolchain.
-velocity-api = "4.2.0"
+# Continuum version catalog.
+# Versions verified against the live repositories on 2026-11-19:
+#   repo.papermc.io — paper-api, folia-api, velocity-api
+#   repo.maven.apache.org (Maven Central) — everything else except the two plugins
+#   plugins.gradle.org — shadow, run-paper, run-velocity
+# Latest stable everywhere; snapshots/RCs are not pinned on purpose.
 
-# Shared libraries. Adventure 5 is provided by both platforms at runtime
-# (Paper 26.x and Velocity 4.x), so in common/api it goes as an api dependency
-# for compilation but is excluded from the shade bundles.
+[versions]
+# --- Platform APIs ------------------------------------------------------------
+minecraft = "26.3"       # paper-plugin.yml api-version and the runServer target
+# Dynamic ref resolves to the newest 26.3 build; as of today that is
+# 26.3.build.256-stable (26.3.build.+ does not match the 26.3-pre-2 alpha line).
+paper-api = "26.3.build.+"
+# Folia ships from the same repo/group layout. The 26.3 line is all -stable now
+# (the -beta line was 26.2); newest is 26.3.build.26-stable.
+folia-api = "26.3.build.+"
+# Velocity 4.3.1 is the latest stable release (4.3.2-SNAPSHOT is still in flight).
+# Requires Java 25 at runtime, matching our toolchain.
+velocity-api = "4.3.1"
+# Adventure 5 is provided by both platforms at runtime; in api/common it goes as
+# an api dependency for compilation but is excluded from the shade bundles.
 adventure = "5.2.0"
-# Configurate is bundled inside each platform jar via shadowJar with relocation.
-configurate = "4.2.0"
-# Incendo Cloud v2: core in common, platform managers in paper/velocity.
-# Core and platforms are versioned separately: cloud-core 2.1.0 is what
+
+# --- Persistence ----------------------------------------------------------------
+hikari = "7.1.0"                # current major; wants a recent JDK (we are on 25)
+mysql-connector-j = "26.10.0"   # Connector/J moved to calendar versioning
+mariadb-client = "4.0.0"        # current stable major; Java 17+ runtime
+mongodb = "5.14.0"              # sync driver is the one we want
+
+# --- Messaging ------------------------------------------------------------------
+amqp-client = "5.38.0"
+
+# --- Serialization --------------------------------------------------------------
+# Jackson 3 (tools.jackson group); jackson-annotations stays on the 2.x line,
+# managed by the same BOM. JSON is the snapshot format (see decisions), no CBOR.
+jackson = "3.3.0"
+
+# --- Config & commands ----------------------------------------------------------
+configurate = "4.2.0"           # YAML configs, bundled into the jars with relocation
+# Cloud v2 core and platforms are versioned separately: cloud-core 2.1.0 is what
 # cloud-paper/cloud-velocity 2.0.1 are compiled against (see their POMs).
 # Do not merge them into one entry — that artifact simply does not exist.
 cloud-core = "2.1.0"
 cloud-platform = "2.0.1"
-slf4j = "2.0.20"
-# Nullability annotations for public signatures. compileOnly: not needed at runtime.
-annotations = "26.1.0"
+slf4j = "2.0.20"                # 2.1.0 is still alpha; platforms provide it at runtime
+annotations = "26.1.0"          # JetBrains nullability, compileOnly, not bundled
 
+# --- Metrics --------------------------------------------------------------------
+# Opt-in only, not wired into the plugins yet.
+bstats = "3.2.1"
+
+# --- Test ------------------------------------------------------------------------
+# junit-bom aligns all jupiter artifacts. testcontainers-bom aligns the
+# testcontainers modules (2.x: testcontainers-mysql, testcontainers-rabbitmq, ...).
+# Integration tests run against real services in containers, never mocks.
+junit = "6.1.3"                # 6.2.0 is only at M1; 6.1.3 is the latest stable
+testcontainers = "2.0.5"
+
+# --- Build plugins -----------------------------------------------------------------
 shadow = "9.6.1"
 run-task = "3.1.0"
 
-# Jackson 3 (tools.jackson group) is the current major line; jackson-annotations
-# stays on the 2.x line and is managed by the same BOM (no 3.x annotations artifact).
-jackson = "3.3.0"
-
-# Persistence.
-# HikariCP 7.x is the current major; requires a recent JDK (fine, we are on 25).
-hikari = "7.1.0"
-# Connector/J switched to calendar-style versioning; 26.10.0 is the current release (Oct 2026).
-mysql-connector-j = "26.10.0"
-# MariaDB Connector/J 4.0.0 (Oct 2026) is the current stable major; Java 17 is the minimum runtime.
-mariadb-client = "4.0.0"
-# Sync driver is the one we want; the async one is a separate artifact.
-mongodb = "5.14.0"
-
-# Messaging.
-amqp-client = "5.38.0"
-
-# Tests. junit-bom aligns all jupiter artifacts. testcontainers-bom aligns the
-# testcontainers modules (2.x renamed the artifacts: testcontainers-mysql, testcontainers-rabbitmq, ...).
-junit = "6.1.3"
-testcontainers = "2.0.5"
-
 [libraries]
+# --- Platform APIs ---------------------------------------------------------------
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
 folia-api = { module = "dev.folia:folia-api", version.ref = "folia-api" }
 velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "velocity-api" }
@@ -61,6 +70,24 @@ adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" 
 adventure-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
 adventure-plain = { module = "net.kyori:adventure-text-serializer-plain", version.ref = "adventure" }
 
+# --- Persistence -------------------------------------------------------------------
+hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector-j" }
+mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version.ref = "mariadb-client" }
+mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version.ref = "mongodb" }
+
+# --- Messaging ----------------------------------------------------------------------
+amqp-client = { module = "com.rabbitmq:amqp-client", version.ref = "amqp-client" }
+
+# --- Serialization -------------------------------------------------------------------
+# Jackson via BOM: jackson-databind/jackson-core are tools.jackson 3.x,
+# jackson-annotations stays com.fasterxml.jackson.core 2.x (managed by the same BOM).
+jackson-bom = { module = "tools.jackson:jackson-bom", version.ref = "jackson" }
+jackson-databind = { module = "tools.jackson.core:jackson-databind" }
+jackson-core = { module = "tools.jackson.core:jackson-core" }
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations" }
+
+# --- Config & commands ----------------------------------------------------------------
 configurate-yaml = { module = "org.spongepowered:configurate-yaml", version.ref = "configurate" }
 
 cloud-core = { module = "org.incendo:cloud-core", version.ref = "cloud-core" }
@@ -72,19 +99,11 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
 
-# Jackson via BOM: jackson-databind/jackson-core are tools.jackson 3.x,
-# jackson-annotations stays com.fasterxml.jackson.core 2.x (managed by the same BOM).
-jackson-bom = { module = "tools.jackson:jackson-bom", version.ref = "jackson" }
-jackson-databind = { module = "tools.jackson.core:jackson-databind" }
-jackson-core = { module = "tools.jackson.core:jackson-core" }
-jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations" }
+# --- Metrics --------------------------------------------------------------------------
+bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
+bstats-velocity = { module = "org.bstats:bstats-velocity", version.ref = "bstats" }
 
-hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
-mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector-j" }
-mariadb-java-client = { module = "org.mariadb.jdbc:mariadb-java-client", version.ref = "mariadb-client" }
-mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version.ref = "mongodb" }
-amqp-client = { module = "com.rabbitmq:amqp-client", version.ref = "amqp-client" }
-
+# --- Test --------------------------------------------------------------------------------
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
