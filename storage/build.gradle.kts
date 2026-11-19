@@ -5,6 +5,10 @@ repositories {
 dependencies {
     implementation(project(":common"))
 
+    // Jackson 3 for modules_json round-tripping (jackson-bom aligns databind/core).
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
+
     // HikariCP drives the single JDBC pool. Bundled into the platform jars with relocation
     // (it is a pool, not a JDBC driver — nothing resolves it by class name).
     implementation(libs.hikari)
