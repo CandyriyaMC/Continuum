@@ -4,6 +4,7 @@ import lol.candyriya.continuum.paper.backend.BackendComposition;
 import lol.candyriya.continuum.paper.integrations.metrics.BukkitMetricsService;
 import lol.candyriya.continuum.paper.integrations.papi.PlaceholderSupport;
 import lol.candyriya.continuum.paper.update.PaperUpdater;
+import lol.candyriya.continuum.paper.orchestration.OrchestrationWiring;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -12,21 +13,32 @@ import org.bukkit.plugin.java.JavaPlugin;
  * only starts and stops the service graph built in {@link PaperServices} and
  * {@link BackendComposition}.
  *
- * <p>The synchronization layer is not wired yet, so the plugin passes
- * {@link BackendComposition.Factories#vanilla()}: the join gate arms and
- * freezes players, then lifts immediately (nothing is pending restore). When
- * the storage/messaging integration lands, the one-line change is here — the
- * factories it provides are the only thing that changes.</p>
+ * <p>The synchronization layer is wired through {@link OrchestrationWiring}: on
+ * enable, storage (SQL or MongoDB, picked from the shared config) and the
+ * restore pipeline (join-gate handler, per-player FIFO, dirty tracking) are
+ * composed into the backend graph; on disable, the shutdown capture runs
+ * before the storage and gate go down. Passing
+ * {@link BackendComposition.Factories#vanilla()} instead keeps the join gate
+ * open with no synchronization — the escape hatch for diagnostics.</p>
  */
 public final class ContinuumPaperPlugin extends JavaPlugin {
 
     private PaperServices services;
     private PlaceholderSupport placeholders;
     private PaperUpdater updater;
+    private OrchestrationWiring wiring;
 
     @Override
     public void onEnable() {
-        this.services = PaperServices.start(this, BackendComposition.Factories.vanilla());
+        this.wiring = OrchestrationWiring.create(this);
+        try {
+            this.services = PaperServices.start(this, wiring.factories());
+        } catch (RuntimeException e) {
+            // the composition unwinds its own failures; release our wiring too
+            wiring.close();
+            wiring = null;
+            throw e;
+        }
         // metrics and placeholders are both inert without their hosts; neither can fail the enable
         services.metrics().register(BukkitMetricsService.createIfEnabled(
                 this, getDataFolder().toPath().resolve("platform.yml"), services.config(), getSLF4JLogger()));
@@ -43,17 +55,20 @@ public final class ContinuumPaperPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // updater first (stop network + timers), then placeholders, then the service graph
+        // updater first (stop network + timers), placeholders next, then the
+        // shutdown capture while storage is still open, then the normal teardown
         if (updater != null) {
             updater.close();
             updater = null;
         }
-        // unregister the expansion first; the services graph closes metrics via its slot
         if (placeholders != null) {
             placeholders.close();
             placeholders = null;
         }
-        // shutdown lifts any held players, closes messaging, storage, channels, scheduler and timers
+        if (wiring != null) {
+            wiring.close();
+            wiring = null;
+        }
         if (services != null) {
             services.close();
             services = null;

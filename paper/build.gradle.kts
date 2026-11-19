@@ -37,6 +37,16 @@ configurations.all {
 dependencies {
     implementation(project(":api"))
     implementation(project(":common"))
+    // the sync pipeline persists through the storage API and rides the same
+    // transaction for outbox events - both are bundled into this jar
+    implementation(project(":storage"))
+    // used only for the wire event types on the outbox path (payload records +
+    // the backbone event id); no transport is instantiated by the backend here
+    implementation(project(":messaging"))
+    // jackson is compile-scoped here on purpose: the orchestration code references
+    // the mapper's types directly; it is bundled and relocated into this jar like elsewhere
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
     compileOnly(libs.paper.api)
     // Folia API is the same surface with the regionized scheduler types. compileOnly:
     // Paper and Folia both provide the API at runtime, we must not bundle either one.
@@ -57,6 +67,8 @@ dependencies {
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    // decode-side check of the outbox payload against the real wire record
+    testImplementation(project(":messaging"))
     testRuntimeOnly(libs.junit.launcher)
     // test-only: payload wire contract pinned against the real wire conventions
     // (snake_case, unknown properties tolerated) without putting Jackson on the main classpath
