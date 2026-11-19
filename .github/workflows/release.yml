@@ -164,7 +164,7 @@ jobs:
 
       - name: Build
         if: steps.tags.outputs.skip != 'true'
-        run: ./gradlew build --parallel --stacktrace -Pversion=build-$N
+        run: ./gradlew build --parallel --stacktrace -Pversion=build-$N --no-configuration-cache
 
       - name: Create annotated tag
         if: steps.tags.outputs.skip != 'true' && steps.tagcheck.outputs.tag_exists == 'false'
