@@ -1,0 +1,88 @@
+# Continuum 消息，zh_CN。
+# MiniMessage 格式：https://docs.advntr.dev/minimessage/
+# “Args” 列出了每条消息接受的类型化占位符。
+# 参数名与模板中的 <标签> 一致。
+
+player:
+  # 玩家在加入/转移后恢复快照期间看到的消息。
+  # Args: none
+  loading: "<gray>正在加载你的数据，请稍候..."
+  # 恢复成功后显示。
+  # Args: none
+  restored: "<green>你的数据已恢复。"
+  # 恢复失败；在问题解决前玩家的操作受限。
+  # Args: none
+  restore-failed: "<red>无法恢复你的数据。请联系管理员。"
+
+sync:
+  error:
+    # 存储后端拒绝了请求，或数据库不可达。
+    # Args: none
+    database: "<red>数据库不可用。请稍后重试。"
+    # 更新的会话持有该记录；此节点在 fencing 竞争中落败。
+    # Args: none
+    fencing: "<red>你的会话已被另一台服务器接管。请重新连接。"
+    # 快照大小超过上限，未写入任何内容。
+    # Args: none
+    too-large: "<red>你的数据过大，无法保存。请联系管理员。"
+    # 快照序列化失败（模块 payload 损坏、字节被篡改）。
+    # Args: none
+    serialization: "<red>无法读取或写入你的数据。"
+    # 缺少 schema 迁移，或迁移产出了无效文档。
+    # Args: none
+    migration: "<red>你的数据使用了不受支持的格式版本。"
+    # RabbitMQ/plugin messaging 通道失败；更改可能不会同步到整个网络。
+    # Args: none
+    messaging: "<red>无法连接到网络。部分更改可能无法同步。"
+
+transfer:
+  # 转移已受理，已通知目标服务器。server = 目标的显示名称。
+  # Args: server (text)
+  requested: "<gray>正在准备将你传送到 <server>..."
+  # 玩家正在被传送。
+  # Args: server (text)
+  started: "<gray>正在将你传送到 <server>..."
+  # 目标已完成恢复并确认了转移。
+  # Args: server (text)
+  completed: "<green>欢迎来到 <server>。"
+  # 转移在提交前中止；玩家留在源服务器。
+  # Args: server (text)
+  failed: "<red>传送失败。你将留在本服务器。"
+
+admin:
+  status:
+    # 节点完全可用。
+    # Args: none
+    online: "<green>在线"
+    # 节点不可达/未运行。
+    # Args: none
+    offline: "<red>离线"
+    # 节点能力受限（例如无数据库，使用缓存运行）。
+    # Args: none
+    degraded: "<yellow>受限模式"
+  reload:
+    # 配置已重新加载并生效。
+    # Args: none
+    success: "<green>配置已重新加载。"
+    # 重新加载被拒绝；沿用之前的配置。
+    # Args: none
+    failed: "<red>重新加载失败；仍使用之前的配置。"
+
+update:
+  # 当有较新的 Continuum 构建可用时向管理员展示。
+  # Args: current (text) - 当前版本，latest (text) - 可用版本
+  available: "<gold>Continuum 有可用更新：<current> -> <latest>。请告知管理员。"
+
+license:
+  # 已持有有效的 tip-jar 许可证。
+  # Args: none
+  active: "<green>许可证有效。感谢你支持 Continuum！"
+  # 未找到许可证；插件依然免费运行。
+  # Args: link (text) - tip-jar 许可证获取地址
+  missing: "<yellow>未找到许可证。Continuum 可自由运行。如需支持开发，可获取 tip-jar 许可证：<link>"
+  # 许可证已过期；插件继续运行，但不再保证支持。
+  # Args: none
+  expired: "<yellow>你的 tip-jar 许可证已过期。Continuum 会继续运行，但不再保证支持。"
+  # 许可证未覆盖此构建版本。
+  # Args: version (text) - 许可证未覆盖的当前版本
+  version-mismatch: "<red>你的许可证不覆盖此版本（<version>）。Continuum 会继续运行，但支持仅适用于已授权版本。"

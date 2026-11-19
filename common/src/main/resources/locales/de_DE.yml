@@ -1,0 +1,88 @@
+# Continuum-Nachrichten, de_DE.
+# MiniMessage-Format: https://docs.advntr.dev/minimessage/
+# Unter "Args" stehen die typisierten Platzhalter pro Nachricht.
+# Die Argumentnamen entsprechen dem <Tag> im Template.
+
+player:
+  # An den Spieler, während sein Snapshot nach Join/Transfer wiederhergestellt wird.
+  # Args: none
+  loading: "<gray>Deine Daten werden geladen, einen Moment..."
+  # Nach erfolgreicher Wiederherstellung.
+  # Args: none
+  restored: "<green>Deine Daten wurden wiederhergestellt."
+  # Wiederherstellung fehlgeschlagen; der Spieler bleibt bis zur Klärung eingeschränkt.
+  # Args: none
+  restore-failed: "<red>Deine Daten konnten nicht wiederhergestellt werden. Bitte wende dich an einen Administrator."
+
+sync:
+  error:
+    # Das Speicher-Backend hat die Anfrage abgelehnt oder ist nicht erreichbar.
+    # Args: none
+    database: "<red>Die Datenbank ist nicht erreichbar. Bitte versuche es gleich noch einmal."
+    # Eine neuere Sitzung besitzt den Datensatz; dieser Knoten hat das Fencing-Rennen verloren.
+    # Args: none
+    fencing: "<red>Deine Sitzung wurde von einem anderen Server übernommen. Bitte verbinde dich neu."
+    # Snapshot hat die Größenbegrenzung überschritten; es wurde nichts geschrieben.
+    # Args: none
+    too-large: "<red>Deine Daten sind zu groß zum Speichern. Bitte wende dich an einen Administrator."
+    # Serialisierung des Snapshots fehlgeschlagen (defektes Modul-Payload, manipulierte Bytes).
+    # Args: none
+    serialization: "<red>Deine Daten konnten nicht gelesen oder geschrieben werden."
+    # Schema-Migration fehlt oder liefert ein ungültiges Dokument.
+    # Args: none
+    migration: "<red>Deine Daten nutzen eine nicht unterstützte Formatversion."
+    # RabbitMQ/Plugin-Messaging-Pfad fehlgeschlagen; Änderungen sind möglicherweise nicht netzwerkweit sichtbar.
+    # Args: none
+    messaging: "<red>Das Netzwerk ist nicht erreichbar. Einige Änderungen werden möglicherweise nicht synchronisiert."
+
+transfer:
+  # Transfer akzeptiert, Zielserver benachrichtigt. server = Anzeigename des Ziels.
+  # Args: server (text)
+  requested: "<gray>Dein Wechsel zu <server> wird vorbereitet..."
+  # Der Spieler wird gerade verschoben.
+  # Args: server (text)
+  started: "<gray>Du wirst zu <server> übertragen..."
+  # Ziel hat wiederhergestellt und den Transfer bestätigt.
+  # Args: server (text)
+  completed: "<green>Willkommen auf <server>."
+  # Transfer vor Commit abgebrochen; der Spieler bleibt auf dem Quellserver.
+  # Args: server (text)
+  failed: "<red>Der Wechsel ist fehlgeschlagen. Du bleibst auf diesem Server."
+
+admin:
+  status:
+    # Knoten ist voll funktionsfähig.
+    # Args: none
+    online: "<green>Online"
+    # Knoten ist nicht erreichbar/läuft nicht.
+    # Args: none
+    offline: "<red>Offline"
+    # Knoten läuft eingeschränkt (z. B. keine DB, nur Cache).
+    # Args: none
+    degraded: "<yellow>Eingeschränkt"
+  reload:
+    # Konfiguration neu geladen und übernommen.
+    # Args: none
+    success: "<green>Konfiguration neu geladen."
+    # Neuladen abgelehnt; die vorherige Konfiguration bleibt aktiv.
+    # Args: none
+    failed: "<red>Neu laden fehlgeschlagen; die vorherige Konfiguration bleibt aktiv."
+
+update:
+  # Für Admins, wenn ein neuerer Continuum-Build verfügbar ist.
+  # Args: current (text) - laufende Version, latest (text) - verfügbare Version
+  available: "<gold>Continuum-Update verfügbar: <current> -> <latest>. Bitte wende dich an deinen Administrator."
+
+license:
+  # Tip-Jar-Lizenz vorhanden und gültig.
+  # Args: none
+  active: "<green>Lizenz gültig. Danke, dass du Continuum unterstützt!"
+  # Keine Lizenz gefunden; das Plugin läuft trotzdem frei.
+  # Args: link (text) - Bezugsquelle der Tip-Jar-Lizenz
+  missing: "<yellow>Keine Lizenz gefunden. Continuum läuft frei. Wenn du die Entwicklung unterstützen möchtest, nimm dir eine Tip-Jar-Lizenz: <link>"
+  # Lizenz abgelaufen; das Plugin läuft weiter, Support nicht.
+  # Args: none
+  expired: "<yellow>Deine Tip-Jar-Lizenz ist abgelaufen. Continuum läuft weiter; Support ist nicht mehr garantiert."
+  # Lizenz deckt diese Build-Version nicht ab.
+  # Args: version (text) - laufende Version, die die Lizenz nicht abdeckt
+  version-mismatch: "<red>Deine Lizenz deckt diese Version (<version>) nicht ab. Continuum läuft weiter, Support gilt für die lizenzierte Version."
