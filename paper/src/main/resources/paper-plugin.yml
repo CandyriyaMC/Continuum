@@ -1,6 +1,6 @@
 name: Continuum
 # Description is a literal on purpose: non-ASCII cannot go through expand(),
-# Gradle reads that source file in the platform encoding and Cyrillic turns to garbage.
+# Gradle reads that source file in the platform encoding otherwise.
 # The version line is ASCII and is substituted by the build below.
 description: Distributed player-state synchronization for Minecraft networks.
 version: '${version}'

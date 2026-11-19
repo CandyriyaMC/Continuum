@@ -14,6 +14,10 @@ player:
   # Shown when the restore failed; the player stays gate-blocked/limited until dealt with.
   # Args: none
   restore-failed: "<red>We couldn't restore your data. Please contact an administrator."
+  # Shown when the restore failed: the player is kicked and may rejoin.
+  # failures = consecutive failed restores for this player; limit = configured max-failures.
+  # Args: failures (number), limit (number)
+  restore-failed-kick: "<red>We couldn't restore your data. Failed restores: <failures> of <limit>. Please contact an administrator."
 
 sync:
   error:

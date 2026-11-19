@@ -1,0 +1,38 @@
+# Continuum backend (Paper/Folia) platform settings.
+# Node-local knobs live here; config.yml carries the shared, network-wide
+# settings. Delete a key and the default from this bundled file comes back on
+# the next load (missing sections are filled with defaults, wrong values are
+# hard errors listing every problem).
+#
+# This file is seeded on first run — your edits are never overwritten.
+
+gate:
+  # When false the backend admits players without holding them back until their data is
+  # restored: players keep vanilla movement and interaction while the load happens in
+  # the background. Only turn this off if you accept players acting on half-restored
+  # state, or while the synchronization layer is not connected at all.
+  enabled: true
+  # Consecutive restore failures from one player before further logins from them are refused.
+  max-failures: 3
+  # How long such a refusal lasts, in minutes, counted from the failure that tripped the limit.
+  failure-cooldown-minutes: 10
+  # Seconds to wait for a restore before it is treated as failed and the player is kicked.
+  # 0 disables the timeout (not recommended: a wedged restore would freeze the player forever).
+  restore-timeout-seconds: 5
+  # Refuse logins while the storage layer reports it cannot serve snapshots.
+  # Fail-closed: with this on, a broken storage backend blocks joins instead of
+  # admitting players onto half-loaded state. Turn off only if you knowingly run
+  # the backend without storage for testing.
+  disallow-on-storage-degraded: true
+
+spawn-policy:
+  # Where a player lands when they join before any snapshot is available.
+  # SERVER_SPAWN: the configured world's spawn point (or the server's default world when world is empty).
+  # LAST_KNOWN_LOCATION: the location stored in the player's last snapshot. Falls back to
+  #   SERVER_SPAWN when no last-known location is available (for example, before the location
+  #   module provides one).
+  # DISABLED: the platform decides (respawn/world spawn); the gate does not override the spawn location.
+  mode: SERVER_SPAWN
+  # World used for SERVER_SPAWN and as the LAST_KNOWN_LOCATION fallback.
+  # Empty string = the server's default (first) world.
+  world: ""

@@ -1,49 +1,36 @@
 package lol.candyriya.continuum.paper;
 
-import lol.candyriya.continuum.common.ContinuumCore;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import lol.candyriya.continuum.paper.backend.BackendComposition;
+
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Entry point of the Paper/Folia plugin. The heavy lifting is done in the bootstrapper
- * (core + commands); this class only wires listeners and scheduler tasks.
+ * The Paper/Folia entry point. Wiring lives elsewhere on purpose — this class
+ * only starts and stops the service graph built in {@link PaperServices} and
+ * {@link BackendComposition}.
+ *
+ * <p>The synchronization layer is not wired yet, so the plugin passes
+ * {@link BackendComposition.Factories#vanilla()}: the join gate arms and
+ * freezes players, then lifts immediately (nothing is pending restore). When
+ * the storage/messaging integration lands, the one-line change is here — the
+ * factories it provides are the only thing that changes.</p>
  */
-public final class ContinuumPaperPlugin extends JavaPlugin implements Listener {
+public final class ContinuumPaperPlugin extends JavaPlugin {
 
-    private ContinuumCore core;
+    private PaperServices services;
 
     @Override
     public void onEnable() {
-        this.core = PaperServices.core();
-
-        getServer().getPluginManager().registerEvents(this, this);
-
-        // Example background task on the global scheduler: survives reload,
-        // runs on the server, cancelled on disable.
-        getServer().getGlobalRegionScheduler().runAtFixedRate(
-                this,
-                // Scheduler parameter unused — anonymous variable _ (Java 22+).
-                _ -> getSLF4JLogger().debug("Core tick, config: debug={}", core.config().debug()),
-                20L,
-                20L * 60L);
+        this.services = PaperServices.start(this, BackendComposition.Factories.vanilla());
+        getSLF4JLogger().info("continuum backend enabled ({})", getServer().getName());
     }
 
     @Override
     public void onDisable() {
-        // The Paper scheduler cancels our tasks on shutdown itself.
-        if (core != null) {
-            core.shutdown();
-            core = null;
+        // shutdown lifts any held players, closes messaging, storage, channels, scheduler and timers
+        if (services != null) {
+            services.close();
+            services = null;
         }
-    }
-
-    @EventHandler
-    public void onJoin(final PlayerJoinEvent event) {
-        var player = event.getPlayer();
-        // Player is an Audience: Components go out without legacy serialization.
-        core.welcomes().welcomeMessage(core.config(), player.getName())
-                .ifPresent(player::sendMessage);
     }
 }

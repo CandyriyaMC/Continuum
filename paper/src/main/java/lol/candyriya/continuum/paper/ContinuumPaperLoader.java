@@ -4,18 +4,19 @@ import io.papermc.paper.plugin.loader.PluginClasspathBuilder;
 import io.papermc.paper.plugin.loader.PluginLoader;
 
 /**
- * Paper plugin loader. Adds libraries to the plugin classpath before the plugin starts,
- * on top of what is already shaded into the jar.
+ * Plugin loader. Runs before the bootstrapper, before any plugin code is loaded.
  *
- * <p>Intentionally empty for now: every dependency is shaded with relocation
- * (see shadowJar in paper/build.gradle.kts). A loader becomes relevant if something heavy
- * and rare ends up not shaded — then inject it here, e.g. via
- * {@code builder.addLibrary(new MavenLibraryResolver()...)}. Until then, hands off.</p>
+ * <p>Deliberately empty: every dependency the backend needs is shaded and
+ * relocated inside this jar (see the shadow configuration), so the plugin
+ * classpath needs no extra libraries and this stage has nothing to add. The
+ * class exists because paper-plugin.yml declares it — and as the designated
+ * place to plug a MavenLibraryResolver in if a heavy, rarely loaded dependency
+ * ever ends up unshaded. Settings belong in bootstrap/enable, not here.</p>
  */
-public class ContinuumPaperLoader implements PluginLoader {
+public final class ContinuumPaperLoader implements PluginLoader {
 
     @Override
-    public void classloader(final PluginClasspathBuilder builder) {
+    public void classloader(PluginClasspathBuilder builder) {
         // Everything is inside the jar already, no extra libraries needed.
     }
 }

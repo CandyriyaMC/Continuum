@@ -35,14 +35,13 @@ configurations.all {
 dependencies {
     implementation(project(":api"))
     implementation(project(":common"))
-    implementation(project(":storage"))
-    implementation(project(":messaging"))
     compileOnly(libs.paper.api)
     // Folia API is the same surface with the regionized scheduler types. compileOnly:
     // Paper and Folia both provide the API at runtime, we must not bundle either one.
     compileOnly(libs.folia.api)
-    // Cloud for paper: brings the Paper/Brigadier binding plus cloud-core.
-    implementation(libs.cloud.paper)
+    // Configurate is bundled into this jar (via :common's dependencies) with relocation.
+    // compileOnly: we compile against the classes; the jar supplies them at runtime.
+    compileOnly(libs.configurate.yaml)
     compileOnly(libs.annotations)
 
     testImplementation(platform(libs.junit.bom))
@@ -74,11 +73,16 @@ tasks {
         }
     }
 
+    named<Jar>("jar") {
+        // keep the plain (unshaded) artifact distinguishable from the shaded one
+        archiveBaseName.set("continuum-paper-plain")
+    }
+
     named<ShadowJar>("shadowJar") {
         archiveClassifier.set("")
         archiveBaseName.set("continuum-paper")
-        // Merge META-INF/services from all bundled jars (Configurate, Cloud, MongoDB
-        // driver registration), otherwise the SPI files silently overwrite each other.
+        // Merge META-INF/services from all bundled jars (Configurate's service registration,
+        // the MongoDB driver when it lands), otherwise the SPI files silently overwrite each other.
         mergeServiceFiles()
         // In Shadow 9.x, service files merged by mergeServiceFiles are rewritten to the
         // relocated names as well, but a same-name collision between a relocated and a
@@ -90,7 +94,6 @@ tasks {
         }
         // Relocation set (bundled third-party code, relocated to lol.candyriya.continuum.libs.*):
         //   configurate / snakeyaml / geantyref — config loading, implementation detail
-        //   cloud (org.incendo)                — command framework
         //   hikari                             — a pool, class names are ours to pick
         //   rabbitmq (com.rabbitmq)            — AMQP client
         //   netty (io.netty)                   — AMQP client's transport; both platforms ship their own netty, never clash
@@ -107,7 +110,6 @@ tasks {
         relocate("org.spongepowered.configurate", "lol.candyriya.continuum.libs.configurate")
         relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
         relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
-        relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
         relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
         relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
         relocate("io.netty", "lol.candyriya.continuum.libs.netty")
@@ -116,6 +118,11 @@ tasks {
         relocate("tools.jackson", "lol.candyriya.continuum.libs.jackson")
         relocate("com.fasterxml.jackson", "lol.candyriya.continuum.libs.jackson")
         dependencies {
+            // Cloud is dead weight here: the backend registers no commands. cloud-core is
+            // excluded outright; cloud-services arrives as its transitive dependency and
+            // Shadow's filters do not reach transitives, so it needs its own line.
+            exclude(dependency("org.incendo:cloud-core:.*"))
+            exclude(dependency("org.incendo:cloud-services:.*"))
             // Adventure is provided by Paper — keep the platform-provided kyori modules out of the jar.
             // (net.kyori:option is NOT provided and is bundled — configurate needs it.)
             exclude(dependency("net.kyori:adventure-api:.*"))

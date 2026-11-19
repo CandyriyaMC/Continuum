@@ -13,6 +13,10 @@ player:
   # Wiederherstellung fehlgeschlagen; der Spieler bleibt bis zur Klärung eingeschränkt.
   # Args: none
   restore-failed: "<red>Deine Daten konnten nicht wiederhergestellt werden. Bitte wende dich an einen Administrator."
+  # Wird angezeigt, wenn die Wiederherstellung fehlgeschlagen ist: der Spieler wird gekickt
+  # und kann erneut beitreten. failures = fehlgeschlagene Wiederherstellungen in Folge; limit = konfiguriertes max-failures.
+  # Args: failures (number), limit (number)
+  restore-failed-kick: "<red>Deine Daten konnten nicht wiederhergestellt werden. Fehlgeschlagene Wiederherstellungen: <failures> von <limit>. Bitte wende dich an einen Administrator."
 
 sync:
   error:

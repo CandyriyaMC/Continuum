@@ -13,6 +13,10 @@ player:
   # 恢复失败；在问题解决前玩家的操作受限。
   # Args: none
   restore-failed: "<red>无法恢复你的数据。请联系管理员。"
+  # 恢复失败时显示：玩家被踢出，可以重新加入。
+  # failures = 该玩家连续失败的恢复次数；limit = 配置的 max-failures。
+  # Args: failures (number), limit (number)
+  restore-failed-kick: "<red>无法恢复你的数据。恢复失败次数：<failures>/<limit>。请联系管理员。"
 
 sync:
   error:
