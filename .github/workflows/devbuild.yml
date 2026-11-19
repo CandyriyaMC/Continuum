@@ -1,0 +1,204 @@
+name: devbuild
+
+# Dev builds: every push to dev produces a devbuild-<N> artifact set.
+#
+# Mirrors .github/workflows/release.yml, but for the dev branch:
+#   version   devbuild-<N>   (N = git rev-list --count HEAD on dev)
+#   channel   dev            (recorded in manifest.json)
+#   R2 keys   dev/devbuild-<N>/...
+#   Discord   DEV webhook    (DISCORD_DEV_WEBHOOK_URL)
+#
+# Dev builds never create tags and never create GitHub Releases; they are
+# unsigned development snapshots for testing, published only to R2 and (if
+# configured) announced on the dev Discord channel.
+#
+# Secrets are optional until configured: every step that needs one is gated
+# on its presence and logs a clear skip notice instead of failing. Required
+# to fully activate:
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY - R2 credentials
+#   R2_BUCKET (variable, not secret)                      - target bucket
+#   R2_MANIFEST_ED25519_KEY                               - PEM private key
+#   DISCORD_DEV_WEBHOOK_URL                               - dev channel
+# GITHUB_TOKEN is provided by the runner and needs no setup.
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read # dev builds publish nothing to the repository
+
+concurrency:
+  group: devbuild-${{ github.ref }}
+  cancel-in-progress: true # superseded dev builds may be cancelled
+
+jobs:
+  build:
+    name: devbuild # distinct from the release `build` check on purpose
+    runs-on: ubuntu-24.04
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_MANIFEST_ED25519_KEY: ${{ secrets.R2_MANIFEST_ED25519_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      DISCORD_DEV_WEBHOOK_URL: ${{ secrets.DISCORD_DEV_WEBHOOK_URL }}
+    steps:
+      - name: Guard - dev only
+        if: github.ref != 'refs/heads/dev'
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          echo "::error::devbuild.yml must only run on dev (got ${GITHUB_REF})."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # rev-list count needs full history
+
+      # Toolchain is Java 25 across all modules; setup-java puts the right one on PATH.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Compute build number
+        run: |
+          set -euo pipefail
+          N="$(git rev-list --count HEAD)"
+          if ! [[ "$N" =~ ^[0-9]+$ ]] || [ "$N" -lt 1 ]; then
+            echo "::error::git rev-list --count returned '$N', expected a positive integer"
+            exit 1
+          fi
+          echo "N=$N" >> "$GITHUB_ENV"
+          echo "BUILD_TAG=devbuild-$N" >> "$GITHUB_ENV"
+          echo "Computed N=$N (devbuild-$N)"
+
+      - name: Build
+        run: ./gradlew build --parallel --stacktrace -Pversion=devbuild-$N
+
+      - name: Build manifest.json
+        run: |
+          set -euo pipefail
+          PAPER_JAR="paper/build/libs/continuum-paper-devbuild-$N.jar"
+          VELOCITY_JAR="velocity/build/libs/continuum-velocity-devbuild-$N.jar"
+          for JAR in "$PAPER_JAR" "$VELOCITY_JAR"; do
+            if [ ! -f "$JAR" ]; then
+              echo "::error::expected artifact missing: $JAR"
+              exit 1
+            fi
+          done
+          PAPER_SHA="$(sha256sum "$PAPER_JAR" | cut -d' ' -f1)"
+          VELOCITY_SHA="$(sha256sum "$VELOCITY_JAR" | cut -d' ' -f1)"
+          PAPER_SIZE="$(stat -c%s "$PAPER_JAR")"
+          VELOCITY_SIZE="$(stat -c%s "$VELOCITY_JAR")"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg build "devbuild-$N" \
+            --arg channel "dev" \
+            --arg commit "$COMMIT_SHA" \
+            --arg paperFile "$(basename "$PAPER_JAR")" \
+            --arg paperSha "$PAPER_SHA" \
+            --argjson paperSize "$PAPER_SIZE" \
+            --arg velocityFile "$(basename "$VELOCITY_JAR")" \
+            --arg velocitySha "$VELOCITY_SHA" \
+            --argjson velocitySize "$VELOCITY_SIZE" \
+            --arg builtAt "$BUILT_AT" \
+            '{
+               build: $build,
+               channel: $channel,
+               commit: $commit,
+               artifacts: {
+                 paper:    { file: $paperFile,    sha256: $paperSha,    size: $paperSize },
+                 velocity: { file: $velocityFile, sha256: $velocitySha, size: $velocitySize }
+               },
+               builtAt: $builtAt
+             }' > manifest.json
+          cat manifest.json
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+
+      - name: Sign manifest.json (Ed25519)
+        if: env.R2_MANIFEST_ED25519_KEY != ''
+        run: |
+          set -euo pipefail
+          KEY="$RUNNER_TEMP/manifest.ed25519.key"
+          PUB="$RUNNER_TEMP/manifest.ed25519.pub"
+          trap 'rm -f "$KEY" "$PUB"' EXIT
+          printf '%s' "$R2_MANIFEST_ED25519_KEY" > "$KEY"
+          chmod 600 "$KEY"
+          openssl pkeyutl -sign -rawin -inkey "$KEY" -in manifest.json -out manifest.json.sig
+          openssl pkey -in "$KEY" -pubout -out "$PUB"
+          openssl pkeyutl -verify -rawin -pubin -inkey "$PUB" -sigfile manifest.json.sig -in manifest.json
+
+      - name: Sign manifest.json - skipped (no key configured)
+        if: env.R2_MANIFEST_ED25519_KEY == ''
+        run: echo "::notice::R2_MANIFEST_ED25519_KEY not configured - manifest.json.sig will NOT be produced or uploaded. See docs/release.md#secrets."
+
+      - name: Upload artifacts to R2
+        if: env.R2_ACCOUNT_ID != '' && env.R2_ACCESS_KEY_ID != '' && env.R2_SECRET_ACCESS_KEY != '' && env.R2_BUCKET != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          PREFIX="dev/devbuild-$N"
+          aws --version
+          aws s3 cp "paper/build/libs/continuum-paper-devbuild-$N.jar" \
+            "s3://${R2_BUCKET}/${PREFIX}/continuum-paper-devbuild-$N.jar" \
+            --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp "velocity/build/libs/continuum-velocity-devbuild-$N.jar" \
+            "s3://${R2_BUCKET}/${PREFIX}/continuum-velocity-devbuild-$N.jar" \
+            --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp manifest.json "s3://${R2_BUCKET}/${PREFIX}/manifest.json" \
+            --endpoint-url "$ENDPOINT" --region auto
+          if [ -f manifest.json.sig ]; then
+            aws s3 cp manifest.json.sig "s3://${R2_BUCKET}/${PREFIX}/manifest.json.sig" \
+              --endpoint-url "$ENDPOINT" --region auto
+          else
+            echo "::notice::manifest.json.sig missing (signing skipped); unsigned manifest uploaded."
+          fi
+
+      - name: Upload artifacts to R2 - skipped (no credentials configured)
+        if: env.R2_ACCOUNT_ID == '' || env.R2_ACCESS_KEY_ID == '' || env.R2_SECRET_ACCESS_KEY == '' || env.R2_BUCKET == ''
+        run: echo "::notice::R2 credentials not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET) - devbuild manifest and jars are NOT published anywhere. See docs/release.md#secrets."
+
+      - name: Post to dev Discord
+        if: env.DISCORD_DEV_WEBHOOK_URL != ''
+        run: |
+          set -euo pipefail
+          COMMIT_URL="${SERVER_URL}/${REPO}/commit/${COMMIT_SHA}"
+          # Dev builds have no changelog file; quote the recent history instead.
+          NOTES_JSON="$(git log --oneline -10 | jq -Rs '.[0:1500]')"
+          jq -n \
+            --arg title "Continuum ${BUILD_TAG}" \
+            --arg url "$COMMIT_URL" \
+            --argjson description "$NOTES_JSON" \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+               username: "Continuum CI",
+               embeds: [{
+                 title: $title,
+                 description: $description,
+                 url: $url,
+                 color: 15844367,
+                 footer: { text: "Continuum dev build - not for production" },
+                 timestamp: $ts
+               }]
+             }' > "$RUNNER_TEMP/discord-devbuild.json"
+          case "$DISCORD_DEV_WEBHOOK_URL" in
+            *\?*) HOOK="${DISCORD_DEV_WEBHOOK_URL}&wait=true" ;;
+            *)    HOOK="${DISCORD_DEV_WEBHOOK_URL}?wait=true" ;;
+          esac
+          curl --fail-with-body -sS -X POST -H "Content-Type: application/json" \
+            --data @"$RUNNER_TEMP/discord-devbuild.json" "$HOOK"
+        env:
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+
+      - name: Post to dev Discord - skipped (no webhook configured)
+        if: env.DISCORD_DEV_WEBHOOK_URL == ''
+        run: echo "::notice::DISCORD_DEV_WEBHOOK_URL not configured - dev build announcement not posted. See docs/release.md#secrets."
