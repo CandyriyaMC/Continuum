@@ -47,10 +47,14 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
-    // test-only: the payload wire contract is pinned against the real wire conventions
+    // test-only: payload wire contract pinned against the real wire conventions
     // (snake_case, unknown properties tolerated) without putting Jackson on the main classpath
     testImplementation(platform(libs.jackson.bom))
     testImplementation(libs.jackson.databind)
+    // Jackson bean introspection resolves every method of the payload records, including
+    // the ones taking Bukkit types, so the platform API must be on the test runtime
+    // classpath (it is in production)
+    testImplementation(libs.folia.api)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers)
     testImplementation(libs.testcontainers.junit.jupiter)
