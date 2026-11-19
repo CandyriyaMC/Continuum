@@ -236,7 +236,7 @@ public final class SqlPlayerStorage implements PlayerStorage {
 
     private static final String SQL_MARK_PUBLISHED = "UPDATE outbox SET published_at = ? WHERE id = ? AND published_at IS NULL";
 
-    private static final String SQL_MARK_FAILED = "UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?";
+    private static final String SQL_MARK_FAILED = "UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ? AND published_at IS NULL";
 
     // ------------------------------------------------------------------------
 
