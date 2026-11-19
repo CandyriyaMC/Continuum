@@ -83,13 +83,20 @@ class PlayerFifoQueueTest {
     void fullQueueRefusesSubmissionsAndLogs() throws Exception {
         try (PlayerFifoQueue fifo = new PlayerFifoQueue(settings(2))) {
             UUID player = UUID.randomUUID();
+            CountDownLatch started = new CountDownLatch(1);
             CountDownLatch release = new CountDownLatch(1);
 
-            // first operation holds the lane; the queue fills behind it
+            // first operation holds the lane; the queue fills behind it.
+            // the started latch is what makes this deterministic: without it the CI
+            // dispatcher might not have polled the first op yet when capacity is measured
             fifo.submit(player, () -> {
+                started.countDown();
                 release.await(5, TimeUnit.SECONDS);
                 return null;
             });
+            if (!started.await(2, TimeUnit.SECONDS)) {
+                throw new AssertionError("first operation never started — something is wedged in the dispatcher");
+            }
             fifo.submit(player, () -> null);
             fifo.submit(player, () -> null);
             // this one exceeds the capacity of 2 pending + 1 running... capacity counts pending only,
