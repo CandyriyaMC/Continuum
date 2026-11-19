@@ -199,7 +199,8 @@ jobs:
       - name: Smoke assertions
         # Hard checks on what a passing boot must prove:
         #   - the plugin enabled (the platform logs "Enabling <name>" at INFO),
-        #   - our own bootstrap ran (the line is logged by ContinuumPaperBootstrap),
+        #   - our own composition ran (storage migrations + module registration,
+        #     logged as "continuum backend composed"),
         #   - no plugin failed to enable (the platform logs that at SEVERE),
         #   - no SEVERE anywhere in the log.
         run: |
@@ -215,8 +216,8 @@ jobs:
             echo '::error::A plugin failed to enable - see server.log'
             fail=1
           fi
-          if ! grep -q 'Commands registered at the bootstrap stage' "${log}"; then
-            echo '::error::Continuum bootstrap line not found - the plugin did not boot'
+          if ! grep -q 'continuum backend composed' "${log}"; then
+            echo '::error::Continuum backend composition line not found - the pipeline did not finish wiring'
             fail=1
           fi
           if ! grep -iE 'enabl[a-z]*[^a-z]*continuum' "${log}" > /dev/null; then
@@ -229,12 +230,12 @@ jobs:
           fi
           echo 'Smoke assertions passed'
 
-      - name: Probe /continuum over RCON
-        # rcon-cli's exit code reflects connection/protocol failure only, so the
-        # output is what is asserted on: it must mention Continuum and must not
-        # be an unknown-command reply. The platform command surface is pre-1.0
-        # and may shift; if this fails, check continuum-status.txt before
-        # assuming a code problem.
+      - name: Probe server responsiveness over RCON
+        # The command surface lives on the Velocity proxy; Paper itself exposes no
+        # Continuum commands, so the smoke proves the server is responsive with a
+        # vanilla command and the plugin lifecycle through the composition lines above.
+        # The full proxy+backend command path is covered by the workflow's own docs;
+        # wiring a proxy into this job is deliberately out of scope for a PR smoke.
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -252,15 +253,9 @@ jobs:
           grep "${asset}" rcon-cli-checksums.txt | sha256sum -c -
           tar -xzf "${asset}" -C smoke rcon-cli
           cd smoke
-          ./rcon-cli --host localhost --port 25575 --password ci continuum status | tee continuum-status.txt
-          if grep -qiE 'unknown command|no command|not recognized' continuum-status.txt; then
-            echo '::error::/continuum status was rejected by the server - see continuum-status.txt'
-            exit 1
-          fi
-          if ! grep -qi 'continuum' continuum-status.txt; then
-            echo '::error::/continuum status output does not mention Continuum - see continuum-status.txt'
-            exit 1
-          fi
+          ./rcon-cli --host localhost --port 25575 --password ci list | tee continuum-rcon.txt
+          grep -qi 'online' continuum-rcon.txt
+          echo "RCON probe passed"
 
       - name: Upload server log on failure
         if: failure()
