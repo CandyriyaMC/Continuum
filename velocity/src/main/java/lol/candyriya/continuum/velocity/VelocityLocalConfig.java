@@ -29,4 +29,9 @@ public record VelocityLocalConfig(VelocityTuning velocity) {
     public long handoffRestoreTimeoutSeconds() {
         return velocity.handoffRestoreTimeoutSeconds();
     }
+
+    /** Convenience accessor; see {@link VelocityTuning#captureTimeoutSeconds()}. */
+    public long captureTimeoutSeconds() {
+        return velocity.captureTimeoutSeconds();
+    }
 }

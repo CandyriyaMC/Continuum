@@ -55,6 +55,44 @@ final class Fakes {
                 });
     }
 
+    /** A plugin message the fake player was asked to send. */
+    record RecordedPluginMessage(String channel, byte[] payload) {
+    }
+
+    /** A player whose EntityScheduler runs inline and that records every outgoing plugin message. */
+    static Player recordingPlayer(UUID id, List<RecordedPluginMessage> outbox) {
+        EntityScheduler scheduler = (EntityScheduler) Proxy.newProxyInstance(
+                Fakes.class.getClassLoader(),
+                new Class<?>[] {EntityScheduler.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "execute":
+                            ((Runnable) args[1]).run();
+                            return true;
+                        case "run", "runDelayed", "runAtFixedRate":
+                            return null;
+                        case "toString":
+                            return "TestEntityScheduler";
+                        default:
+                            return defaultValue(method.getReturnType());
+                    }
+                });
+        return (Player) Proxy.newProxyInstance(
+                Fakes.class.getClassLoader(),
+                new Class<?>[] {Player.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getUniqueId" -> id;
+                    case "getName" -> "TestPlayer";
+                    case "getScheduler" -> scheduler;
+                    case "sendPluginMessage" -> {
+                        outbox.add(new RecordedPluginMessage((String) args[1], (byte[]) args[2]));
+                        yield null;
+                    }
+                    case "toString" -> "TestPlayer[" + id + "]";
+                    default -> defaultValue(method.getReturnType());
+                });
+    }
+
     static Plugin fakePlugin() {
         return (Plugin) Proxy.newProxyInstance(
                 Fakes.class.getClassLoader(),

@@ -41,7 +41,13 @@ public enum PluginMessageKind {
     SESSION_TOKEN(8, "continuum.session.token", PluginMessageDirection.PROXY_TO_BACKEND, SessionTokenMessage.class),
 
     /** Proxy's answer to a {@link #PING}. Carries the ping's correlation id. */
-    PONG(9, "continuum.pong", PluginMessageDirection.PROXY_TO_BACKEND, PongMessage.class);
+    PONG(9, "continuum.pong", PluginMessageDirection.PROXY_TO_BACKEND, PongMessage.class),
+
+    /** Proxy tells a backend the player is about to move: capture now. Sent before a switch is allowed. Reply: {@link #CAPTURE_RESULT}. */
+    CAPTURE_REQUEST(10, "continuum.capture.request", PluginMessageDirection.PROXY_TO_BACKEND, CaptureRequestMessage.class),
+
+    /** Backend's answer to a {@link #CAPTURE_REQUEST}: whether the snapshot reached the database. Carries the request's correlation id. */
+    CAPTURE_RESULT(11, "continuum.capture.result", PluginMessageDirection.BACKEND_TO_PROXY, CaptureResultMessage.class);
 
     private final byte id;
     private final String wireId;

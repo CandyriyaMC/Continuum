@@ -20,7 +20,9 @@ class PluginMessageKindTest {
             "continuum.backend.status",
             "continuum.route.result",
             "continuum.session.token",
-            "continuum.pong");
+            "continuum.pong",
+            "continuum.capture.request",
+            "continuum.capture.result");
 
     @Test
     void wireIdsMatchTheDocumentedSetExactly() {
@@ -111,6 +113,14 @@ class PluginMessageKindTest {
     }
 
     @Test
+    void unassignedByteIdsAreRejected() {
+        // every byte outside the 1-11 registry stays dead, forever
+        assertThrows(UnknownMessageKindException.class, () -> PluginMessageKind.fromId(0));
+        assertThrows(UnknownMessageKindException.class, () -> PluginMessageKind.fromId(12));
+        assertThrows(UnknownMessageKindException.class, () -> PluginMessageKind.fromId(255));
+    }
+
+    @Test
     void unknownWireIdIsRejected() {
         assertThrows(IllegalArgumentException.class, () -> PluginMessageKind.fromWireId("continuum.unknown.thing"));
         assertThrows(IllegalArgumentException.class, () -> PluginMessageKind.fromWireId(null));
@@ -128,8 +138,8 @@ class PluginMessageKindTest {
         long backendToProxy = java.util.Arrays.stream(PluginMessageKind.values())
                 .filter(k -> k.direction() == PluginMessageDirection.BACKEND_TO_PROXY)
                 .count();
-        assertEquals(6, backendToProxy);
-        assertEquals(3, PluginMessageKind.values().length - backendToProxy);
+        assertEquals(7, backendToProxy);
+        assertEquals(4, PluginMessageKind.values().length - backendToProxy);
     }
 
     private static Set<String> allWireIds() {

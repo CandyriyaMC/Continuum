@@ -16,3 +16,8 @@ velocity:
   # in a blocked state forever. Also bounds how long a handoff may sit idle in
   # the pre-restore phases before it is failed out. 1-120.
   handoff-restore-timeout-seconds: 8
+  # Seconds the proxy waits for the backend to answer a capture request fired
+  # when a player switches servers (/server or forced hosts) while no transfer
+  # is in flight. The switch is refused when the answer does not come in time.
+  # 1-10.
+  capture-timeout-seconds: 3

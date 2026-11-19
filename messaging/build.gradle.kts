@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.jackson.databind)
 
     compileOnly(libs.slf4j.api)
+    // @Nullable on the capture-result record's nullable snapshotId/detail
+    compileOnly(libs.annotations)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

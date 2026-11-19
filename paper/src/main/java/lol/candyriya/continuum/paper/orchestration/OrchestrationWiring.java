@@ -74,6 +74,26 @@ public final class OrchestrationWiring implements AutoCloseable {
             shared.modules = modules;
             return storage;
         };
+        // the capture responder answers continuum.capture.request from the proxy; install runs after the
+        // graph exists (composition step 8), so the transfer participant is resolvable by then
+        var messagingInstaller = (lol.candyriya.continuum.paper.backend.MessagingInstaller) (registrar, config) -> {
+            if (!config.messaging().pluginMessage().enabled()) {
+                LOGGER.info("plugin messaging disabled; capture responder not registered");
+                return null;
+            }
+            Graph g = graph.get();
+            if (g == null) {
+                throw new IllegalStateException(
+                        "messaging installed before the orchestration graph — the capture responder has no transfer participant");
+            }
+            String channel = config.messaging().pluginMessage().channel();
+            var participant = new lol.candyriya.continuum.paper.transfer.TransferParticipant(g.snapshots());
+            var responder = new lol.candyriya.continuum.paper.messaging.CaptureResponder(plugin, participant, channel, LOGGER);
+            registrar.registerIncoming(channel, responder);
+            LOGGER.info("capture responder registered on '{}'", channel);
+            return (lol.candyriya.continuum.paper.backend.MessagingRegistration) () ->
+                    registrar.unregisterIncoming(channel, responder);
+        };
         var restoreFactory = (lol.candyriya.continuum.paper.backend.RestoreHandlerFactory) gate -> {
             if (shared.storage == null || shared.config == null || shared.modules == null) {
                 throw new IllegalStateException(
@@ -114,7 +134,7 @@ public final class OrchestrationWiring implements AutoCloseable {
                     config.network().serverId());
             return restore;
         };
-        return new BackendComposition.Factories(storageFactory, null, restoreFactory, null);
+        return new BackendComposition.Factories(storageFactory, messagingInstaller, restoreFactory, null);
     }
 
     /** The transfer-side handle, once the graph is up; null before the restore factory ran. */

@@ -3,13 +3,15 @@ package lol.candyriya.continuum.messaging.pluginmessage;
 /**
  * Messages the proxy may send to backends.
  *
- * <p><b>These are only ever sent as replies.</b> The proxy does not get to
- * shout at backends unprompted on this channel — every frame of this
- * hierarchy carries the correlation id of the in-flight
- * {@link BackendToProxyMessage} it answers, and platform code is expected to
- * build them at the reply site so the pairing is structural, not remembered.
- * Anything that is not a reply belongs on the durable transport (RabbitMQ),
- * not here.</p>
+ * <p><b>These are mostly sent as replies.</b> {@link RouteResultMessage},
+ * {@link SessionTokenMessage} and {@link PongMessage} only ever answer a
+ * backend-originated frame, and platform code is expected to build them at
+ * the reply site so the pairing is structural, not remembered. The one
+ * exception is {@link CaptureRequestMessage}: the proxy fires it unprompted
+ * from the connection pipeline when a player is about to move servers, and
+ * the backend answers with a {@link CaptureResultMessage} carrying the same
+ * correlation id. Durable semantics still live on the storage/outbox side;
+ * this pipe is for presence and hints.</p>
  *
  * <p>On the backend this hierarchy is received over a connection the proxy is
  * assumed to control; a player can still spray bytes on any registered
@@ -17,5 +19,5 @@ package lol.candyriya.continuum.messaging.pluginmessage;
  * act on these frames either — match them to a pending entry, or drop them.</p>
  */
 public sealed interface ProxyToBackendMessage extends PluginMessage
-        permits RouteResultMessage, SessionTokenMessage, PongMessage {
+        permits RouteResultMessage, SessionTokenMessage, PongMessage, CaptureRequestMessage {
 }

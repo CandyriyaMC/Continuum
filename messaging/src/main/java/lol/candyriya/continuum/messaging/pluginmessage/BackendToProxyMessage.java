@@ -13,5 +13,5 @@ package lol.candyriya.continuum.messaging.pluginmessage;
  */
 public sealed interface BackendToProxyMessage extends PluginMessage
         permits HandoffRequestMessage, HandoffReadyMessage, HandoffResumedMessage,
-                LocaleSetMessage, PingMessage, BackendStatusMessage {
+                LocaleSetMessage, PingMessage, BackendStatusMessage, CaptureResultMessage {
 }

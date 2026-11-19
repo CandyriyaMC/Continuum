@@ -1,6 +1,7 @@
 package lol.candyriya.continuum.velocity;
 
 import lol.candyriya.continuum.velocity.command.ContinuumCommands;
+import lol.candyriya.continuum.velocity.handoff.CaptureOnSwitchListener;
 import lol.candyriya.continuum.velocity.handoff.HandoffEventListener;
 import lol.candyriya.continuum.velocity.messaging.ContinuumChannels;
 import lol.candyriya.continuum.velocity.session.KickContext;
@@ -82,6 +83,12 @@ public final class ContinuumVelocityPlugin {
         ContinuumCommands.register(commands, graph, proxy, logger);
         // transfer handshake: our listener observes backend frames and drives the handoff lifecycle
         proxy.getEventManager().register(this, new HandoffEventListener(graph.handoffs(), logger));
+        // capture-on-switch runs first on ServerPreConnectEvent (priority lives on its @Subscribe) so a
+        // refused capture keeps the player on the source backend; registered next to the handoff listener
+        proxy.getEventManager().register(this, new CaptureOnSwitchListener(graph.handoffs(), graph.messenger(),
+                graph.messages(), graph.metrics(), logger,
+                () -> graph.config().messaging().pluginMessage().enabled(),
+                () -> graph.localConfig().captureTimeoutSeconds()));
 
         var config = graph.config();
         logger.info("Continuum {} ready: node={} network={} role={}",

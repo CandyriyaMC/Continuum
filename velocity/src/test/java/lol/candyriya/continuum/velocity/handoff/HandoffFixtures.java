@@ -131,9 +131,11 @@ final class HandoffFixtures {
         final UUID uuid;
         final RegisteredServer currentBackend;
         final List<Component> sentMessages = new ArrayList<>();
+        final java.util.List<byte[]> allPayloads = new java.util.concurrent.CopyOnWriteArrayList<>();
         volatile Component disconnectReason;
         volatile ConnectionRequestBuilder lastRequest;
         volatile int connectionRequestCount;
+        volatile boolean connectionSendResult = true;
         ConnectionRequestBuilder.Status connectStatus = ConnectionRequestBuilder.Status.SUCCESS;
         private Player proxyInstance;
 
@@ -173,7 +175,7 @@ final class HandoffFixtures {
         }
 
         FakeConnection connectionTo(RegisteredServer backend) {
-            return new FakeConnection(this, backend, true);
+            return new FakeConnection(this, backend, connectionSendResult);
         }
     }
 
@@ -222,6 +224,7 @@ final class HandoffFixtures {
         public boolean sendPluginMessage(ChannelIdentifier identifier, byte[] data) {
             lastChannel = identifier;
             sentPayloads.add(data);
+            player.allPayloads.add(data);
             return sendResult;
         }
 

@@ -227,6 +227,22 @@ public final class PluginMessageValidator {
                 }
                 checkLogText(m.reason(), violations, "reason");
             }
+            case CaptureRequestMessage m -> {
+                if (m.targetUuid() == null) {
+                    violations.add("targetUuid must not be null");
+                } else if (PluginMessageConstraints.isNilUuid(m.targetUuid())) {
+                    violations.add("targetUuid must not be the nil UUID");
+                }
+                checkLogText(m.reason(), violations, "reason");
+            }
+            case CaptureResultMessage m -> {
+                if (m.snapshotId() != null && m.snapshotId() < 1) {
+                    violations.add("snapshotId must be >= 1 when present, got " + m.snapshotId());
+                }
+                if (m.detail() != null) {
+                    checkLogText(m.detail(), violations, "detail");
+                }
+            }
         }
         return violations;
     }

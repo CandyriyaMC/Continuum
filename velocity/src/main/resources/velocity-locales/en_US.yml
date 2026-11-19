@@ -10,6 +10,9 @@ velocity:
   # Prepended to command output from the proxy. Contains the bracket tag on purpose;
   # deployments can restyle it, but it should stay short and visible.
   prefix: "<gold>[Continuum]</gold> "
+  # Shown when the proxy could not capture the player's data before a server switch; the switch is refused and the player stays put.
+  # Args: none
+  capture-failed: "<red>We couldn't save your progress, so you stay on this server."
   help:
     # Args: version (text) - the running Continuum build
     header: "<gold>Continuum <version></gold> <gray>- available commands</gray>"

@@ -27,6 +27,8 @@ class PluginMessageCodecRoundTripTest {
             case ROUTE_RESULT -> new RouteResultMessage(player, RouteOutcome.ALLOWED, "survival-1", "ok");
             case SESSION_TOKEN -> new SessionTokenMessage(player, "opaque-token-123", EXPIRES);
             case PONG -> new PongMessage(SENT_AT);
+            case CAPTURE_REQUEST -> new CaptureRequestMessage(player, "switch");
+            case CAPTURE_RESULT -> new CaptureResultMessage(true, 4242L, null);
         };
     }
 
@@ -84,6 +86,8 @@ class PluginMessageCodecRoundTripTest {
         assertEquals(7, PluginMessageKind.ROUTE_RESULT.id());
         assertEquals(8, PluginMessageKind.SESSION_TOKEN.id());
         assertEquals(9, PluginMessageKind.PONG.id());
+        assertEquals(10, PluginMessageKind.CAPTURE_REQUEST.id());
+        assertEquals(11, PluginMessageKind.CAPTURE_RESULT.id());
     }
 
     @Test
