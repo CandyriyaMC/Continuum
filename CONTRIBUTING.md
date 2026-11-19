@@ -33,6 +33,10 @@ Thanks for wanting to help! This document applies to this repository. If anythin
   compiles everything, runs the tests, and produces both shaded jars.
 - Dev servers for manual verification: `./gradlew :paper:runServer`, `./gradlew :velocity:runVelocity`.
 
+## CI tags
+
+You can put tags like `[docs only]` or `[compat skip]` in commit messages and PR descriptions to control what CI runs. See [docs/ci-tags.md](docs/ci-tags.md) for the full registry, the syntax and how master and forks are handled.
+
 ## Style notes
 
 - Java 25 idioms (records, sealed types, pattern matching, `var`) where they fit. No `--enable-preview` in shipping code — server runtimes won't enable it and the jar won't start.

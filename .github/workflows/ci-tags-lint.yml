@@ -1,0 +1,26 @@
+name: ci-tags-lint
+
+on:
+  pull_request:
+  push:
+    branches: [master, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  tags:
+    name: tag parser tests + docs sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run tag parser tests
+        run: python -m pytest tools/ci/test_tags.py -q
+      - name: Docs registry sync check
+        run: python tools/ci/tags.py --check-docs docs/ci-tags.md
