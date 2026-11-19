@@ -1,16 +1,128 @@
-# Main plugin config. Everything is MiniMessage, cheat sheet: https://webui.advntr.dev/
-# Delete a key and it comes back with its default value on the next start/reload.
+# Continuum shared configuration. One artifact is built per platform; the
+# meaningful keys below are the same on every node.
+# MiniMessage is used for all user-facing strings: https://docs.advntr.dev/minimessage/
+#
+# Secrets stay plain strings on purpose. How you protect this file (permissions,
+# templating, vault injection) is your deployment's business — but never commit
+# real credentials, and note that values below are examples, not secrets.
+#
+# Unknown module ids under sync.modules are rejected at load. Delete a key and
+# the default comes back on the next load (missing keys are filled with defaults,
+# wrong values are hard errors).
 
-# Do not touch: config schema version, migrations on plugin upgrade key off of this
-config-version: 1
-
-# Prefix of all plugin messages
-prefix: "<gray>[<gradient:#7ed6ff:#4a9eff>Continuum</gradient>]</gray> "
-
-# Core debug logging
+# Master debug flag. Turns on verbose internal logging; keep false in production.
 debug: false
 
-# Join welcome message, <player> gets substituted automatically
-welcome:
-  enabled: true
-  message: "<green>Hey, <player>! Welcome to the network :)"
+network:
+  # Network identifier. Lowercase dns-ish: [a-z0-9][a-z0-9._-]*, max 63 chars.
+  id: main-network
+  # This node's unique id inside the network. Same charset as id.
+  server-id: survival-1
+  # backend (Paper/Folia - holds player state) or coordinator (Velocity - routes transfers).
+  # Velocity deployments MUST change role to coordinator, or the coordinator wakes up thinking it is a backend.
+  role: backend
+
+database:
+  # mysql | mariadb | mongodb. MariaDB shares the mysql block below; only the driver differs.
+  type: mysql
+  mysql:
+    # JDBC host. Required for mysql/mariadb.
+    host: localhost
+    port: 3306
+    database: continuum
+    username: continuum
+    # Empty means no auth (local dev only). Never commit a real password here.
+    password: ""
+    pool:
+      # HikariCP tuning. Keep minimum-idle <= maximum-pool-size.
+      maximum-pool-size: 10
+      minimum-idle: 2
+      # How long a caller waits for a connection. 100ms-60s.
+      connection-timeout: 5s
+      # Retire connections after this long. 1s-60m.
+      max-lifetime: 30m
+  mongodb:
+    # Full connection string, e.g. mongodb://user:pass@host:27017/ or mongodb+srv://...
+    # Required for mongodb. Never commit a real URI with credentials.
+    uri: ""
+    database: continuum
+    pool:
+      max-size: 50
+      min-size: 2
+      # How long a caller waits for a pooled connection. 100ms-60s.
+      max-wait-time: 5s
+
+messaging:
+  rabbitmq:
+    # Broker carries network events (transfer handoffs, releases). Disable only if
+    # plugin messaging is all you need and durability across restarts is not required.
+    enabled: true
+    # amqp:// or amqps://. May embed credentials: never commit, never share.
+    # The default points at a broker on localhost with no auth — change it to your broker.
+    uri: "amqp://localhost:5672/"
+    # Durable exchange events are published to. A DLX is derived from it.
+    exchange: continuum.events
+    retry:
+      # Attempts before a message lands in the DLQ. 0 = no retries.
+      max-attempts: 5
+      # Delay before the first retry (10ms-60s).
+      initial-backoff: 200ms
+      # Backoff ceiling (exponential growth between initial and max).
+      max-backoff: 10s
+  plugin-message:
+    # Plugin messaging frames on the channel below (backend <-> velocity).
+    enabled: true
+    # Lowercase namespaced channel, required by Velocity.
+    channel: continuum:main
+    # Frame size cap in bytes. 1024-65536. Anything larger is dropped before decode.
+    max-payload-bytes: 65536
+
+sync:
+  autosave:
+    # Periodic snapshot of online players.
+    enabled: true
+    # Sweep interval. 5s-24h. 60s is a sane default.
+    interval: 60s
+  modules:
+    # Set any known module to false to stop syncing it. Unknown ids are rejected.
+    inventory: true
+    ender-chest: true
+    vitals: true
+    experience: true
+    effects: true
+    attributes: true
+    location: true
+    gamemode: true
+    advancements: true
+    statistics: true
+    recipes: true
+    pdc: true
+    custom: true
+  transfer:
+    # Never start a transfer without a durable pre-transfer snapshot. Keep true unless
+    # you enjoy losing player state.
+    require-snapshot: true
+    # Hold the player in a blocked state until the restore on the target finishes.
+    # Keep true so nobody plays on a half-restored inventory.
+    restore-before-play: true
+  recovery:
+    # Re-scan for sessions orphaned by a crash and recover them.
+    enabled: true
+    interval: 30s
+    # Module restore order for partial recovery. Empty = default order.
+    # Every id must be a known module and may appear only once.
+    restore-order: []
+
+i18n:
+  # Locale used when no player/client preference is known. Form: ll_CC.
+  default-locale: en_US
+  # Locale used when a key is missing in the requested one. Form: ll_CC.
+  fallback-locale: en_US
+  # Prefer the client's locale over the admin default when resolving messages.
+  use-client-locale: true
+
+serialization:
+  # Compress snapshots with gzip. Off by default; enable after measuring on your workload.
+  gzip: false
+  # Hard cap for a stored snapshot, bytes. 65536-67108864. 8 MiB covers pathological inventories.
+  max-snapshot-bytes: 8388608

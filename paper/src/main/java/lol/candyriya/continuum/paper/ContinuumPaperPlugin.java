@@ -1,49 +1,77 @@
 package lol.candyriya.continuum.paper;
 
-import lol.candyriya.continuum.common.ContinuumCore;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import lol.candyriya.continuum.paper.backend.BackendComposition;
+import lol.candyriya.continuum.paper.integrations.metrics.BukkitMetricsService;
+import lol.candyriya.continuum.paper.integrations.papi.PlaceholderSupport;
+import lol.candyriya.continuum.paper.update.PaperUpdater;
+import lol.candyriya.continuum.paper.orchestration.OrchestrationWiring;
+
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Entry point of the Paper/Folia plugin. The heavy lifting is done in the bootstrapper
- * (core + commands); this class only wires listeners and scheduler tasks.
+ * The Paper/Folia entry point. Wiring lives elsewhere on purpose — this class
+ * only starts and stops the service graph built in {@link PaperServices} and
+ * {@link BackendComposition}.
+ *
+ * <p>The synchronization layer is wired through {@link OrchestrationWiring}: on
+ * enable, storage (SQL or MongoDB, picked from the shared config) and the
+ * restore pipeline (join-gate handler, per-player FIFO, dirty tracking) are
+ * composed into the backend graph; on disable, the shutdown capture runs
+ * before the storage and gate go down. Passing
+ * {@link BackendComposition.Factories#vanilla()} instead keeps the join gate
+ * open with no synchronization — the escape hatch for diagnostics.</p>
  */
-public final class ContinuumPaperPlugin extends JavaPlugin implements Listener {
+public final class ContinuumPaperPlugin extends JavaPlugin {
 
-    private ContinuumCore core;
+    private PaperServices services;
+    private PlaceholderSupport placeholders;
+    private PaperUpdater updater;
+    private OrchestrationWiring wiring;
 
     @Override
     public void onEnable() {
-        this.core = PaperServices.core();
-
-        getServer().getPluginManager().registerEvents(this, this);
-
-        // Example background task on the global scheduler: survives reload,
-        // runs on the server, cancelled on disable.
-        getServer().getGlobalRegionScheduler().runAtFixedRate(
-                this,
-                // Scheduler parameter unused — anonymous variable _ (Java 22+).
-                _ -> getSLF4JLogger().debug("Core tick, config: debug={}", core.config().debug()),
-                20L,
-                20L * 60L);
+        this.wiring = OrchestrationWiring.create(this);
+        try {
+            this.services = PaperServices.start(this, wiring.factories());
+        } catch (RuntimeException e) {
+            // the composition unwinds its own failures; release our wiring too
+            wiring.close();
+            wiring = null;
+            throw e;
+        }
+        // metrics and placeholders are both inert without their hosts; neither can fail the enable
+        services.metrics().register(BukkitMetricsService.createIfEnabled(
+                this, getDataFolder().toPath().resolve("platform.yml"), services.config(), getSLF4JLogger()));
+        this.placeholders = PlaceholderSupport.start(this, services.config(), getSLF4JLogger());
+        try {
+            this.updater = PaperUpdater.create(this, getSLF4JLogger(), getDataFolder().toPath());
+            this.updater.start();
+        } catch (Throwable t) {
+            // the updater is an extra, never a prerequisite
+            getSLF4JLogger().error("update service failed to start; continuum runs normally without it", t);
+        }
+        getSLF4JLogger().info("continuum backend enabled ({})", getServer().getName());
     }
 
     @Override
     public void onDisable() {
-        // The Paper scheduler cancels our tasks on shutdown itself.
-        if (core != null) {
-            core.shutdown();
-            core = null;
+        // updater first (stop network + timers), placeholders next, then the
+        // shutdown capture while storage is still open, then the normal teardown
+        if (updater != null) {
+            updater.close();
+            updater = null;
         }
-    }
-
-    @EventHandler
-    public void onJoin(final PlayerJoinEvent event) {
-        var player = event.getPlayer();
-        // Player is an Audience: Components go out without legacy serialization.
-        core.welcomes().welcomeMessage(core.config(), player.getName())
-                .ifPresent(player::sendMessage);
+        if (placeholders != null) {
+            placeholders.close();
+            placeholders = null;
+        }
+        if (wiring != null) {
+            wiring.close();
+            wiring = null;
+        }
+        if (services != null) {
+            services.close();
+            services = null;
+        }
     }
 }

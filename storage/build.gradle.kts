@@ -4,6 +4,14 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
+    // the storage-side relay claimers implement the messaging-side outbox
+    // contract against the same table the storages write to; storage is the
+    // only module with the drivers, messaging the only one with the contract
+    implementation(project(":messaging"))
+
+    // Jackson 3 for modules_json round-tripping (jackson-bom aligns databind/core).
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
 
     // HikariCP drives the single JDBC pool. Bundled into the platform jars with relocation
     // (it is a pool, not a JDBC driver — nothing resolves it by class name).
@@ -27,4 +35,5 @@ dependencies {
     testImplementation(libs.testcontainers.mysql)
     testImplementation(libs.testcontainers.mariadb)
     testImplementation(libs.testcontainers.mongodb)
+    testImplementation(libs.slf4j.simple)
 }

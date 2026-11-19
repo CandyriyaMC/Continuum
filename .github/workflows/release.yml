@@ -1,30 +1,325 @@
 name: release
 
-# Релиз по тегу vX.Y.Z. Версию в gradle.properties подними заранее,
-# тег обязан совпадать: v1.2.3 при version=1.2.3.
+# Release flow: dev -> (PR) -> master -> this workflow.
+#
+# Triggered by a push to master. The version of the released build is
+# build-<N>, where N is the number of commits on master at merge time
+# (git rev-list --count HEAD). The workflow builds with -Pversion=build-<N>,
+# creates the annotated tag build-<N>, and only then publishes notes.
+#
+# The GitHub Release carries SOURCE ONLY (no jars). The jars, a signed
+# manifest.json and the manifest signature go to a private Cloudflare R2
+# bucket; the license service reads them from there. See docs/release.md
+# for the full runbook.
+#
+# A master merge whose head commit message carries the [no release] tag is
+# honored: the release job is skipped entirely (build.yml still gates the
+# merge). This is the documented escape hatch for docs-only merges; see
+# docs/ci-tags.md and docs/release.md. Manual workflow_dispatch re-runs
+# always perform the release.
+#
+# Branch protection on master is the enforcement point: master only accepts
+# squash-merged PRs and requires the `build` check. Tags are immutable once
+# created - if something is wrong, fix forward with a new build; never
+# re-tag or force-push.
+#
+# Secrets are optional until configured: every step that needs one is gated
+# on its presence and logs a clear skip notice instead of failing, so the
+# workflow still works on a fresh repository. Required to fully activate:
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY - R2 credentials
+#   R2_BUCKET (variable, not secret)                      - target bucket
+#   R2_MANIFEST_ED25519_KEY                               - PEM private key
+#   DISCORD_WEBHOOK_URL                                   - release channel
+# GITHUB_TOKEN is provided by the runner and needs no setup.
+
 on:
   push:
-    tags: ["v*"]
+    branches: [master]
+  # Manual re-run. build_number overrides the computed N; use it only when
+  # re-running a failed release for the exact same commit that the original
+  # tag already points at. Tag re-use is refused otherwise.
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Build number N (re-run only; must match the existing tag build-<N> and HEAD)"
+        required: false
+        type: string
 
 permissions:
-  contents: write
+  contents: write # tag push + GitHub Release creation
+
+# Never cancel a release in flight; superseded dev builds may be cancelled,
+# master releases may not.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    name: build # required status check name - keep stable
+    runs-on: ubuntu-24.04
+    env:
+      # Promoted from secrets so steps can gate on their presence via `if:`.
+      # GitHub does not allow `secrets.*` directly in step `if:` conditions.
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_MANIFEST_ED25519_KEY: ${{ secrets.R2_MANIFEST_ED25519_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      BUILD_NUMBER_INPUT: ${{ inputs.build_number }}
     steps:
+      - name: Guard - master only
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::release.yml must only run on master (got ${GITHUB_REF}). Dispatch it on master or push a merge there."
+          exit 1
+        env:
+          GITHUB_REF: ${{ github.ref }}
+
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history: rev-list count + changelog generation need it
+
+      # Toolchain is Java 25 across all modules; setup-java puts the right one on PATH.
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
       - uses: gradle/actions/setup-gradle@v6
+
+      # The repo ships a tag parser (tools/ci/tags.py) whose output drives CI
+      # policy. [no release] on a merge to master means "docs-only, no tag,
+      # no release job". Failure of the parser itself must not block a
+      # release, so a parse error falls back to performing the release.
+      - name: Parse CI tags
+        id: tags
+        if: github.event_name == 'push'
+        env:
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -uo pipefail
+          NO_REL=false
+          if python3 tools/ci/tags.py --check "$HEAD_COMMIT_MESSAGE" --ref master --json > "$RUNNER_TEMP/tags.json" 2> "$RUNNER_TEMP/tags.err"; then
+            NO_REL="$(jq -r '.no_release' "$RUNNER_TEMP/tags.json")"
+            jq -r '.notes[]? // empty' "$RUNNER_TEMP/tags.json" | sed 's/^/  tag note: /'
+          else
+            echo "::warning::CI tag parser failed; continuing with a normal release"
+            NO_REL=false
+          fi
+          echo "skip=$NO_REL" >> "$GITHUB_OUTPUT"
+
+      # On manual dispatch the 'tags' step is skipped, so steps.tags.outputs.skip
+      # is empty and '' != 'true' - every release step runs, as intended for re-runs.
+      - name: Release skipped ([no release])
+        if: steps.tags.outputs.skip == 'true'
+        run: echo "::notice::[no release] tag found on this push to master - release skipped by design (see docs/ci-tags.md and docs/release.md). The build gate in build.yml still applies."
+
+      - name: Compute build number
+        if: steps.tags.outputs.skip != 'true'
+        id: compute
+        run: |
+          set -euo pipefail
+          INPUT="$BUILD_NUMBER_INPUT"
+          if [ -n "$INPUT" ]; then
+            N="$INPUT"
+            echo "Using build number from workflow_dispatch input: $N"
+          else
+            N="$(git rev-list --count HEAD)"
+            echo "Computed N=$N from git rev-list --count HEAD"
+          fi
+          if ! [[ "$N" =~ ^[0-9]+$ ]] || [ "$N" -lt 1 ]; then
+            echo "::error::build_number must be a positive integer, got '$N'"
+            exit 1
+          fi
+          echo "N=$N" >> "$GITHUB_ENV"
+          echo "BUILD_TAG=build-$N" >> "$GITHUB_ENV"
+          echo "tag=build-$N" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag availability
+        if: steps.tags.outputs.skip != 'true'
+        id: tagcheck
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if git tag -l "build-$N" | grep -q .; then
+            TAG_SHA="$(git rev-list -n 1 "build-$N")"
+            HEAD_SHA="$(git rev-parse HEAD)"
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TAG_SHA" = "$HEAD_SHA" ]; then
+              echo "Tag build-$N already exists at HEAD ($HEAD_SHA) - re-run detected, tag creation will be skipped."
+              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Tag build-$N already exists (points at $TAG_SHA, HEAD is $HEAD_SHA). Release tags are immutable: merge the fix and let the number advance, or re-run via workflow_dispatch only when HEAD == the tagged commit."
+              exit 1
+            fi
+          else
+            if [ -n "$BUILD_NUMBER_INPUT" ]; then
+              echo "::error::Tag build-$N does not exist. The build_number input is only valid for re-running a failed release whose tag was already created; it must match an existing tag that points at HEAD."
+              exit 1
+            fi
+            echo "Tag build-$N is available."
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
-        run: ./gradlew build --parallel --stacktrace
-      - name: Release
+        if: steps.tags.outputs.skip != 'true'
+        run: ./gradlew build --parallel --stacktrace -Pversion=build-$N
+
+      - name: Create annotated tag
+        if: steps.tags.outputs.skip != 'true' && steps.tagcheck.outputs.tag_exists == 'false'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "build-$N" -m "Release build-$N"
+          git push origin "build-$N"
+
+      - name: Generate release notes
+        if: steps.tags.outputs.skip != 'true'
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          # --latest: only the notes for build-<N>. --strip header: keep the
+          # repository changelog header out of the release body.
+          args: --latest --strip header --no-exec
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: Build manifest.json
+        if: steps.tags.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          PAPER_JAR="paper/build/libs/continuum-paper-build-$N.jar"
+          VELOCITY_JAR="velocity/build/libs/continuum-velocity-build-$N.jar"
+          for JAR in "$PAPER_JAR" "$VELOCITY_JAR"; do
+            if [ ! -f "$JAR" ]; then
+              echo "::error::expected artifact missing: $JAR"
+              exit 1
+            fi
+          done
+          PAPER_SHA="$(sha256sum "$PAPER_JAR" | cut -d' ' -f1)"
+          VELOCITY_SHA="$(sha256sum "$VELOCITY_JAR" | cut -d' ' -f1)"
+          PAPER_SIZE="$(stat -c%s "$PAPER_JAR")"
+          VELOCITY_SIZE="$(stat -c%s "$VELOCITY_JAR")"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg build "build-$N" \
+            --arg channel "release" \
+            --arg commit "$COMMIT_SHA" \
+            --arg paperFile "$(basename "$PAPER_JAR")" \
+            --arg paperSha "$PAPER_SHA" \
+            --argjson paperSize "$PAPER_SIZE" \
+            --arg velocityFile "$(basename "$VELOCITY_JAR")" \
+            --arg velocitySha "$VELOCITY_SHA" \
+            --argjson velocitySize "$VELOCITY_SIZE" \
+            --arg builtAt "$BUILT_AT" \
+            '{
+               build: $build,
+               channel: $channel,
+               commit: $commit,
+               artifacts: {
+                 paper:    { file: $paperFile,    sha256: $paperSha,    size: $paperSize },
+                 velocity: { file: $velocityFile, sha256: $velocitySha, size: $velocitySize }
+               },
+               builtAt: $builtAt
+             }' > manifest.json
+          cat manifest.json
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+
+      - name: Sign manifest.json (Ed25519)
+        if: steps.tags.outputs.skip != 'true' && env.R2_MANIFEST_ED25519_KEY != ''
+        run: |
+          set -euo pipefail
+          KEY="$RUNNER_TEMP/manifest.ed25519.key"
+          PUB="$RUNNER_TEMP/manifest.ed25519.pub"
+          trap 'rm -f "$KEY" "$PUB"' EXIT
+          # Raw private key must be the PKCS8 PEM produced by `openssl genpkey`;
+          # see docs/release.md for generation and storage instructions.
+          printf '%s' "$R2_MANIFEST_ED25519_KEY" > "$KEY"
+          chmod 600 "$KEY"
+          openssl pkeyutl -sign -rawin -inkey "$KEY" -in manifest.json -out manifest.json.sig
+          # Self-check: verify the signature we just produced before publishing anything.
+          openssl pkey -in "$KEY" -pubout -out "$PUB"
+          openssl pkeyutl -verify -rawin -pubin -inkey "$PUB" -sigfile manifest.json.sig -in manifest.json
+
+      - name: Sign manifest.json - skipped (no key configured)
+        if: steps.tags.outputs.skip != 'true' && env.R2_MANIFEST_ED25519_KEY == ''
+        run: echo "::notice::R2_MANIFEST_ED25519_KEY not configured - manifest.json.sig will NOT be produced or uploaded. See docs/release.md#secrets."
+
+      - name: Upload artifacts to R2
+        if: steps.tags.outputs.skip != 'true' && env.R2_ACCOUNT_ID != '' && env.R2_ACCESS_KEY_ID != '' && env.R2_SECRET_ACCESS_KEY != '' && env.R2_BUCKET != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          PREFIX="release/build-$N"
+          aws --version
+          aws s3 cp "paper/build/libs/continuum-paper-build-$N.jar" \
+            "s3://${R2_BUCKET}/${PREFIX}/continuum-paper-build-$N.jar" \
+            --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp "velocity/build/libs/continuum-velocity-build-$N.jar" \
+            "s3://${R2_BUCKET}/${PREFIX}/continuum-velocity-build-$N.jar" \
+            --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp manifest.json "s3://${R2_BUCKET}/${PREFIX}/manifest.json" \
+            --endpoint-url "$ENDPOINT" --region auto
+          if [ -f manifest.json.sig ]; then
+            aws s3 cp manifest.json.sig "s3://${R2_BUCKET}/${PREFIX}/manifest.json.sig" \
+              --endpoint-url "$ENDPOINT" --region auto
+          else
+            echo "::notice::manifest.json.sig missing (signing skipped); unsigned manifest uploaded."
+          fi
+
+      - name: Upload artifacts to R2 - skipped (no credentials configured)
+        if: steps.tags.outputs.skip != 'true' && (env.R2_ACCOUNT_ID == '' || env.R2_ACCESS_KEY_ID == '' || env.R2_SECRET_ACCESS_KEY == '' || env.R2_BUCKET == '')
+        run: echo "::notice::R2 credentials not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET) - artifacts are NOT published anywhere. See docs/release.md#secrets."
+
+      # Source only by design: no `files:` key, no upload-artifact handoff,
+      # generate_release_notes disabled - notes come from git-cliff above.
+      - name: Create GitHub Release
+        if: steps.tags.outputs.skip != 'true'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            paper/build/libs/*.jar
-            velocity/build/libs/*.jar
-          generate_release_notes: true
+          tag_name: ${{ steps.compute.outputs.tag }}
+          name: ${{ steps.compute.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          generate_release_notes: false
+
+      - name: Post to Discord
+        if: steps.tags.outputs.skip != 'true' && env.DISCORD_WEBHOOK_URL != ''
+        run: |
+          set -euo pipefail
+          NOTES_JSON="$(jq -Rs '.[0:3500]' RELEASE_NOTES.md)"
+          RELEASE_URL="${SERVER_URL}/${REPO}/releases/tag/${BUILD_TAG}"
+          jq -n \
+            --arg title "Continuum ${BUILD_TAG}" \
+            --arg url "$RELEASE_URL" \
+            --argjson description "$NOTES_JSON" \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+               username: "Continuum CI",
+               embeds: [{
+                 title: $title,
+                 description: $description,
+                 url: $url,
+                 color: 5763719,
+                 footer: { text: "Continuum release" },
+                 timestamp: $ts
+               }]
+             }' > "$RUNNER_TEMP/discord-release.json"
+          case "$DISCORD_WEBHOOK_URL" in
+            *\?*) HOOK="${DISCORD_WEBHOOK_URL}&wait=true" ;;
+            *)    HOOK="${DISCORD_WEBHOOK_URL}?wait=true" ;;
+          esac
+          curl --fail-with-body -sS -X POST -H "Content-Type: application/json" \
+            --data @"$RUNNER_TEMP/discord-release.json" "$HOOK"
+        env:
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+
+      - name: Post to Discord - skipped (no webhook configured)
+        if: steps.tags.outputs.skip != 'true' && env.DISCORD_WEBHOOK_URL == ''
+        run: echo "::notice::DISCORD_WEBHOOK_URL not configured - release announcement not posted. See docs/release.md#secrets."

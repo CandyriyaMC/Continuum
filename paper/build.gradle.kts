@@ -8,28 +8,80 @@ plugins {
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    // PlaceholderAPI is only published here; compileOnly, so the jar is never bundled
+    maven("https://repo.helpch.at/releases/")
 }
 
 configurations.all {
-    // paper-api and folia-api both ship the bukkit capability; Gradle refuses to pick one
-    // on its own. Both provide the same 26.3 API surface (folia-api is the Folia fork),
-    // so selectHighestVersion just resolves it deterministically and stays correct as builds bump.
-    // Folia-specific behavior is reached via the same scheduler API Paper exposes, not via extra classes.
+    // paper-api and folia-api both ship the bukkit capability (and, new with the 26-stable
+    // folia line, paper-api's own capability). Gradle refuses to include both in one graph,
+    // so one has to win per capability. Unlock Folia for compile: folia-api is the superset
+    // surface (Paper API + regionized schedulers), so it always takes it; the build numbers
+    // of the two forks drift independently and any fixed comparison would pick wrongly.
+    // Runtime stays identical on both platforms — both provide these APIs.
+    fun selectFolia(details: org.gradle.api.artifacts.CapabilityResolutionDetails) {
+        // candidates do not implement the public ModuleComponentIdentifier in Gradle internals,
+        // so match on the rendered id instead of casting.
+        details.candidates
+            .find { it.id.toString().startsWith("dev.folia:folia-api:") }
+            ?.let { details.select(it) }
+    }
     resolutionStrategy.capabilitiesResolution.withCapability("org.bukkit:bukkit") {
-        selectHighestVersion()
+        selectFolia(this)
+    }
+    resolutionStrategy.capabilitiesResolution.withCapability("com.destroystokyo.paper:paper-api") {
+        selectFolia(this)
     }
 }
 
 dependencies {
+    implementation(project(":api"))
     implementation(project(":common"))
+    // the sync pipeline persists through the storage API and rides the same
+    // transaction for outbox events - both are bundled into this jar
     implementation(project(":storage"))
+    // used only for the wire event types on the outbox path (payload records +
+    // the backbone event id); no transport is instantiated by the backend here
     implementation(project(":messaging"))
+    // jackson is compile-scoped here on purpose: the orchestration code references
+    // the mapper's types directly; it is bundled and relocated into this jar like elsewhere
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
     compileOnly(libs.paper.api)
     // Folia API is the same surface with the regionized scheduler types. compileOnly:
     // Paper and Folia both provide the API at runtime, we must not bundle either one.
     compileOnly(libs.folia.api)
-    // Cloud for paper: brings the Paper/Brigadier binding plus cloud-core.
-    implementation(libs.cloud.paper)
+    // Configurate is bundled into this jar (via :common's dependencies) with relocation.
+    // compileOnly: we compile against the classes; the jar supplies them at runtime.
+    compileOnly(libs.configurate.yaml)
+    compileOnly(libs.annotations)
+    // bStats metrics (opt-in, inert until the service id is set in BukkitMetricsService).
+    // Shaded and relocated like every other bundled library — never compileOnly here:
+    // nothing else provides these classes on the classpath at runtime.
+    implementation(libs.bstats.bukkit)
+    // PlaceholderAPI: optional host, compileOnly + runtime detection; not shaded.
+    // Not in the version catalog yet; keep in sync with research-metrics (2.12.3).
+    compileOnly("me.clip:placeholderapi:2.12.3")
+    // tests instantiate the internal expansion against the real API surface
+    testImplementation("me.clip:placeholderapi:2.12.3")
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    // decode-side check of the outbox payload against the real wire record
+    testImplementation(project(":messaging"))
+    testRuntimeOnly(libs.junit.launcher)
+    // test-only: payload wire contract pinned against the real wire conventions
+    // (snake_case, unknown properties tolerated) without putting Jackson on the main classpath
+    testImplementation(platform(libs.jackson.bom))
+    testImplementation(libs.jackson.databind)
+    // Jackson bean introspection resolves every method of the payload records, including
+    // the ones taking Bukkit types, so the platform API must be on the test runtime
+    // classpath (it is in production)
+    testImplementation(libs.folia.api)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.slf4j.simple)
 }
 
 tasks {
@@ -52,11 +104,16 @@ tasks {
         }
     }
 
+    named<Jar>("jar") {
+        // keep the plain (unshaded) artifact distinguishable from the shaded one
+        archiveBaseName.set("continuum-paper-plain")
+    }
+
     named<ShadowJar>("shadowJar") {
         archiveClassifier.set("")
         archiveBaseName.set("continuum-paper")
-        // Merge META-INF/services from all bundled jars (Configurate, Cloud, MongoDB
-        // driver registration), otherwise the SPI files silently overwrite each other.
+        // Merge META-INF/services from all bundled jars (Configurate's service registration,
+        // the MongoDB driver when it lands), otherwise the SPI files silently overwrite each other.
         mergeServiceFiles()
         // In Shadow 9.x, service files merged by mergeServiceFiles are rewritten to the
         // relocated names as well, but a same-name collision between a relocated and a
@@ -68,7 +125,6 @@ tasks {
         }
         // Relocation set (bundled third-party code, relocated to lol.candyriya.continuum.libs.*):
         //   configurate / snakeyaml / geantyref — config loading, implementation detail
-        //   cloud (org.incendo)                — command framework
         //   hikari                             — a pool, class names are ours to pick
         //   rabbitmq (com.rabbitmq)            — AMQP client
         //   netty (io.netty)                   — AMQP client's transport; both platforms ship their own netty, never clash
@@ -83,9 +139,9 @@ tasks {
         //   MongoDB driver: org.bson, com.mongodb     — registers via META-INF/services with its own class names
         //   kotlin/coroutines — nothing bundles them today; if something does, those stay unrelocated
         relocate("org.spongepowered.configurate", "lol.candyriya.continuum.libs.configurate")
+        relocate("org.bstats", "lol.candyriya.continuum.libs.bstats")
         relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
         relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
-        relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
         relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
         relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
         relocate("io.netty", "lol.candyriya.continuum.libs.netty")
@@ -94,6 +150,11 @@ tasks {
         relocate("tools.jackson", "lol.candyriya.continuum.libs.jackson")
         relocate("com.fasterxml.jackson", "lol.candyriya.continuum.libs.jackson")
         dependencies {
+            // Cloud is dead weight here: the backend registers no commands. cloud-core is
+            // excluded outright; cloud-services arrives as its transitive dependency and
+            // Shadow's filters do not reach transitives, so it needs its own line.
+            exclude(dependency("org.incendo:cloud-core:.*"))
+            exclude(dependency("org.incendo:cloud-services:.*"))
             // Adventure is provided by Paper — keep the platform-provided kyori modules out of the jar.
             // (net.kyori:option is NOT provided and is bundled — configurate needs it.)
             exclude(dependency("net.kyori:adventure-api:.*"))

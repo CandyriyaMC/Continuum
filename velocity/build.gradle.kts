@@ -11,15 +11,32 @@ repositories {
 }
 
 dependencies {
+    // Only the modules this plugin actually compiles against. The rest come in as
+    // they are needed; bundles of unused project deps produce misleading jars.
     implementation(project(":common"))
-    implementation(project(":storage"))
+    // the transfer handshake speaks the shared plugin-message wire contract; without
+    // the codec the proxy cannot drive or answer any of the handoff frames
     implementation(project(":messaging"))
     compileOnly(libs.velocity.api)
     // Runs the velocity-api annotation processor, which reads @Plugin at compile time
     // and writes the plugin descriptor (id/name/version/...) into the jar.
     annotationProcessor(libs.velocity.api)
+    // Tests implement the platform interfaces (fakes) and run against them.
+    testImplementation(libs.velocity.api)
     // Cloud for velocity: brings the Velocity binding plus cloud-core.
     implementation(libs.cloud.velocity)
+    // Proxy-local settings (velocity.yml) are loaded with Configurate, same as the shared config.
+    implementation(libs.configurate.yaml)
+    compileOnly(libs.annotations)
+    // bStats metrics (opt-in, inert until the service id is set in VelocityMetricsService).
+    // Shaded and relocated like every other bundled library — never compileOnly here:
+    // nothing else provides these classes on the classpath at runtime.
+    implementation(libs.bstats.velocity)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.launcher)
+    testImplementation(libs.slf4j.simple)
 }
 
 tasks {
@@ -48,6 +65,7 @@ tasks {
         relocate("org.yaml.snakeyaml", "lol.candyriya.continuum.libs.snakeyaml")
         relocate("io.leangen.geantyref", "lol.candyriya.continuum.libs.geantyref")
         relocate("org.incendo.cloud", "lol.candyriya.continuum.libs.cloud")
+        relocate("org.bstats", "lol.candyriya.continuum.libs.bstats")
         relocate("com.zaxxer.hikari", "lol.candyriya.continuum.libs.hikari")
         relocate("com.rabbitmq", "lol.candyriya.continuum.libs.rabbitmq")
         relocate("io.netty", "lol.candyriya.continuum.libs.netty")

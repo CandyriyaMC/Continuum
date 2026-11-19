@@ -1,7 +1,10 @@
-name: Close stale issues and PRs
+name: stale
+
 on:
   schedule:
     - cron: "30 1 * * *"
+  # let maintainers kick a pass manually when the queue is piling up
+  workflow_dispatch:
 
 jobs:
   stale:
@@ -12,7 +15,28 @@ jobs:
     steps:
       - uses: actions/stale@v11
         with:
-          days-before-stale: 60
-          days-before-close: 14
-          stale-issue-message: "Помечено как stale: нет активности 60 дней. Отпишись, если ещё актуально."
-          stale-pr-message: "Помечено как stale: нет активности 60 дней."
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          days-before-pr-stale: 60
+          days-before-pr-close: 14
+          stale-issue-message: >-
+            This issue has had no activity for 60 days, so it's being marked as stale.
+            If it still matters, leave a comment and it will stay open. Otherwise it will
+            be closed automatically in 14 days.
+          close-issue-message: >-
+            Closing this issue due to inactivity. If it still reproduces on the latest
+            release, please open a new issue with updated details — a comment here works too
+            and a maintainer can reopen it.
+          stale-pr-message: >-
+            This pull request has had no activity for 60 days, so it's being marked as stale.
+            A push or a comment will keep it alive. Otherwise it will be closed automatically
+            in 14 days.
+          close-pr-message: >-
+            Closing this pull request due to inactivity. You're welcome to reopen it once
+            it's ready for another look.
+          # labels that mean "not forgotten" — never auto-close these
+          exempt-issue-labels: "good first issue,help wanted"
+          # anything actively being worked on is exempt
+          exempt-all-assignees: true
+          exempt-all-milestones: true
+          operations-per-run: 60

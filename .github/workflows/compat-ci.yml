@@ -1,0 +1,355 @@
+name: compat-ci
+
+# Compatibility gate for the always-latest policy: the pinned Minecraft line is
+# built, then booted on a real Paper and a real Folia server, and probed over
+# RCON. Runs on every PR, weekly against the newest STABLE builds, and on demand.
+#
+# The support matrix below lists only what this repository actually builds and
+# boots today: 26.3 on Java 25. Older 1.21.x lines are intentionally absent -
+# there is no per-version build profile (a single paper-api/folia-api pin in the
+# version catalog, one api-version in paper-plugin.yml, one Java toolchain), so a
+# 1.21.x entry could not compile, let alone boot. Do not add a matrix entry until
+# that profile exists; always-latest means the newest release is the target.
+
+on:
+  pull_request:
+    branches: [master, dev]
+  schedule:
+    # Mondays 06:17 UTC
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+# Forks and PR tokens get read-only access; detect-mc escalates to issues: write
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The support matrix. One check context ("compat") covers all matrix legs.
+  compat:
+    name: compat
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Current support matrix: 26.3 only (see the header comment).
+          # To add a platform for an existing line, add one entry here.
+          # To add a version line, first give it a build profile
+          # (paper-api/folia-api pin, api-version in paper-plugin.yml, Java
+          # toolchain), then one entry per platform here.
+          - mc: "26.3"
+            java: "25"
+            project: paper
+          - mc: "26.3"
+            java: "25"
+            project: folia
+
+    services:
+      # Storage runs its schema migrations at boot and refuses to serve on
+      # failure, so the smoke needs a real MySQL 8, not a stub.
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_DATABASE: continuum_smoke
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uroot -pci --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Toolchain is Java 25 across all modules; setup-java puts the right one on PATH.
+      # (The Gradle toolchain resolver would download it anyway, but installing it
+      # here is faster and matches the toolchain spec.)
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the plugin
+        run: ./gradlew :paper:shadowJar -Pversion=build-compat --stacktrace
+
+      - name: Resolve the ${{ matrix.project }} ${{ matrix.mc }} server from Fill v3
+        # Fill's "latest" tracks the newest build of the pinned version. Refuse
+        # anything that is not a STABLE channel build, so a pre-release promoted
+        # to "latest" never silently becomes our smoke target.
+        run: |
+          set -euo pipefail
+          project='${{ matrix.project }}'
+          mc='${{ matrix.mc }}'
+          curl -fsSL -H 'User-Agent: continuum-compat/1.0' \
+            "https://fill.papermc.io/v3/projects/${project}/versions/${mc}/builds/latest" \
+            -o server-build.json
+          channel=$(jq -r '.channel' server-build.json)
+          if [ "${channel}" != "STABLE" ]; then
+            echo "::error::Fill 'latest' for ${project} ${mc} is channel ${channel}; refusing to smoke a non-STABLE build"
+            exit 1
+          fi
+          url=$(jq -r '.downloads["server:default"].url' server-build.json)
+          sha=$(jq -r '.downloads["server:default"].checksums.sha256' server-build.json)
+          build_id=$(jq -r '.id' server-build.json)
+          echo "Resolved ${project} ${mc} build ${build_id} (channel ${channel})"
+          curl -fsSL -o server.jar "${url}"
+          echo "${sha}  server.jar" | sha256sum -c -
+
+      - name: Stage the smoke server
+        run: |
+          set -euo pipefail
+          mkdir -p smoke/plugins/continuum smoke/plugins/Continuum
+          cp server.jar smoke/
+          cp paper/build/libs/continuum-paper-*.jar smoke/plugins/
+          echo 'eula=true' > smoke/eula.txt
+          cat > smoke/server.properties <<'EOF'
+          online-mode=false
+          view-distance=4
+          simulation-distance=4
+          level-type=flat
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=ci
+          EOF
+          # Smoke config; every key here exists in the bundled reference
+          # config.yml and passes the same validation the plugin applies at boot.
+          # MySQL 8 (service above) carries the schema migrations at enable time.
+          # RabbitMQ stays disabled on purpose: messaging.plugin-message carries
+          # frames, events would wait in the outbox. The degraded mode is explicit
+          # by design and is not a fallback we invented here.
+          cat > smoke/config.yml <<'EOF'
+          debug: false
+          network:
+            id: continuum-ci
+            server-id: smoke-1
+            role: backend
+          database:
+            type: mysql
+            mysql:
+              host: localhost
+              port: 3306
+              database: continuum_smoke
+              username: root
+              password: ci
+              pool:
+                maximum-pool-size: 4
+                minimum-idle: 1
+                connection-timeout: 5s
+                max-lifetime: 30m
+          messaging:
+            rabbitmq:
+              enabled: false
+              uri: "amqp://localhost:5672/"
+              exchange: continuum.events
+              retry:
+                max-attempts: 3
+                initial-backoff: 100ms
+                max-backoff: 5s
+            plugin-message:
+              enabled: true
+              channel: continuum:messaging
+              max-payload-bytes: 32768
+          i18n:
+            default-locale: en_US
+            fallback-locale: en_US
+            use-client-locale: true
+          EOF
+          # The platform names the plugin data directory after the descriptor
+          # ("Continuum"); the lowercase mirror covers case-sensitive filesystems
+          # if that ever changes. Same bytes in both.
+          cp smoke/config.yml smoke/plugins/continuum/config.yml
+          cp smoke/config.yml smoke/plugins/Continuum/config.yml
+
+      - name: Start the server and wait for boot
+        # $! is the java process; the loop bails out early (with the log tail) if it dies.
+        run: |
+          set -euo pipefail
+          cd smoke
+          nohup java -Xms512M -Xmx2G -jar server.jar nogui > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 150); do
+            if grep -q 'Done (' server.log; then
+              echo "Server reported Done (after ~$((i * 2))s)"
+              exit 0
+            fi
+            if ! kill -0 "$(cat server.pid)" 2>/dev/null; then
+              echo '::error::Server process exited before reporting Done; last log lines:'
+              tail -n 100 server.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+          echo '::error::Timed out waiting for "Done (" after 300s'
+          tail -n 100 server.log || true
+          exit 1
+
+      - name: Smoke assertions
+        # Hard checks on what a passing boot must prove:
+        #   - the plugin enabled (the platform logs "Enabling <name>" at INFO),
+        #   - our own composition ran (storage migrations + module registration,
+        #     logged as "continuum backend composed"),
+        #   - no plugin failed to enable (the platform logs that at SEVERE),
+        #   - no SEVERE anywhere in the log.
+        run: |
+          set -euo pipefail
+          fail=0
+          log=smoke/server.log
+
+          if grep -n 'SEVERE' "${log}"; then
+            echo '::error::SEVERE line(s) found in server.log'
+            fail=1
+          fi
+          if grep -inE 'error occurred while enabling' "${log}"; then
+            echo '::error::A plugin failed to enable - see server.log'
+            fail=1
+          fi
+          if ! grep -q 'continuum backend composed' "${log}"; then
+            echo '::error::Continuum backend composition line not found - the pipeline did not finish wiring'
+            fail=1
+          fi
+          if ! grep -iE 'enabl[a-z]*[^a-z]*continuum' "${log}" > /dev/null; then
+            echo '::error::Could not find the platform enable line for Continuum in server.log'
+            fail=1
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            tail -n 120 "${log}"
+            exit 1
+          fi
+          echo 'Smoke assertions passed'
+
+      - name: Probe server responsiveness over RCON
+        # The command surface lives on the Velocity proxy; Paper itself exposes no
+        # Continuum commands, so the smoke proves the server is responsive with a
+        # vanilla command and the plugin lifecycle through the composition lines above.
+        # The full proxy+backend command path is covered by the workflow's own docs;
+        # wiring a proxy into this job is deliberately out of scope for a PR smoke.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Resolve the newest rcon-cli release at run time - never hardcode the tag.
+          tag=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            https://api.github.com/repos/itzg/rcon-cli/releases/latest | jq -r '.tag_name')
+          ver="${tag#v}"
+          echo "rcon-cli latest release: ${tag}"
+          asset="rcon-cli_${ver}_linux_amd64.tar.gz"
+          curl -fsSL -o "${asset}" \
+            "https://github.com/itzg/rcon-cli/releases/download/${tag}/${asset}"
+          curl -fsSL -o rcon-cli-checksums.txt \
+            "https://github.com/itzg/rcon-cli/releases/download/${tag}/rcon-cli_${ver}_checksums.txt"
+          grep "${asset}" rcon-cli-checksums.txt | sha256sum -c -
+          tar -xzf "${asset}" -C smoke rcon-cli
+          cd smoke
+          ./rcon-cli --host localhost --port 25575 --password ci list | tee continuum-rcon.txt
+          grep -qi 'online' continuum-rcon.txt
+          echo "RCON probe passed"
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compat-${{ matrix.project }}-${{ matrix.mc }}
+          path: |
+            smoke/server.log
+            smoke/continuum-status.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop the server
+        if: always()
+        run: |
+          cd smoke || exit 0
+          if [ -f server.pid ]; then
+            if [ -f rcon-cli ]; then
+              ./rcon-cli --host localhost --port 25575 --password ci stop || true
+            fi
+            for i in $(seq 1 15); do
+              kill -0 "$(cat server.pid)" 2>/dev/null || break
+              sleep 2
+            done
+            kill "$(cat server.pid)" 2>/dev/null || true
+          fi
+
+  # Notices when a new Minecraft release is out and files/refreshes a tracking
+  # issue. Runs only on the weekly schedule and manual dispatch - never on PRs.
+  detect-mc:
+    name: detect-mc
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the pinned MC against the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Pinned MC from the version catalog (the line is: minecraft = "26.3"  # comment)
+          current=$(grep -E '^minecraft[[:space:]]*=' gradle/libs.versions.toml \
+            | head -n 1 | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*$/\1/')
+          if [ -z "${current}" ]; then
+            echo '::error::Could not read minecraft = "..." from gradle/libs.versions.toml'
+            exit 1
+          fi
+
+          curl -fsSL -H 'User-Agent: continuum-compat/1.0' \
+            https://piston-meta.mojang.com/mc/game/version_manifest_v2.json -o manifest.json
+          latest=$(jq -r '.latest.release' manifest.json)
+          echo "catalog pins: ${current}; piston-meta latest release: ${latest}"
+
+          if [ "${latest}" = "${current}" ]; then
+            echo 'No new Minecraft release - catalog is current.'
+            exit 0
+          fi
+
+          title="MC ${latest} released — compatibility matrix update needed"
+
+          cat > issue-body.md <<'EOF'
+          The scheduled Minecraft release detector has noticed that **__LATEST__** is now the latest release per the Mojang version manifest (piston-meta version_manifest_v2.json).
+
+          The repository still pins **__CURRENT__** (`minecraft = "__CURRENT__"` in gradle/libs.versions.toml).
+
+          Always-latest policy: the project targets the newest Minecraft release, so the pin should move once the new version line is buildable and smoke-tested.
+
+          Checklist:
+          - [ ] Bump `minecraft` (and the `paper-api` / `folia-api` refs) in gradle/libs.versions.toml
+          - [ ] Bump `api-version` in paper/src/main/resources/paper-plugin.yml to the new line
+          - [ ] Confirm Fill v3 serves STABLE builds for the new version line
+          - [ ] Update the support matrix in docs/compatibility.md
+          - [ ] Make sure the `compat-ci` workflow smoke legs for the new version are green
+
+          This issue was opened automatically by the scheduled detector. Close it when the pin lands.
+          EOF
+
+          # Fill the two placeholders (quoted heredoc above, so nothing else expands)
+          sed -i -e "s/__LATEST__/${latest}/g" -e "s/__CURRENT__/${current}/g" issue-body.md
+
+          # Reuse an open issue for this release if one already exists
+          # (search by the version token - the em-dash in the title is not search-stable)
+          existing=$(gh issue list --state open --search "\"MC ${latest}\" in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "${existing}" ]; then
+            echo "Open issue #${existing} already tracks this release - refreshing it"
+            gh issue comment "${existing}" --body "Re-checked by the scheduled detector: catalog still pins \`${current}\`, piston-meta still reports \`${latest}\` as the latest release."
+          else
+            echo 'No open issue for this release - creating one'
+            gh issue create --title "${title}" --label area:ci --body-file issue-body.md
+          fi

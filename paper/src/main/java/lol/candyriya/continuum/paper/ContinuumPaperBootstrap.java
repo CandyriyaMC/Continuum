@@ -1,35 +1,61 @@
 package lol.candyriya.continuum.paper;
 
+import lol.candyriya.continuum.common.config.ConfigLoader;
+import lol.candyriya.continuum.common.config.ContinuumConfig;
+import lol.candyriya.continuum.common.i18n.Translator;
+import lol.candyriya.continuum.paper.config.PlatformConfig;
+import lol.candyriya.continuum.paper.config.PlatformConfigLoader;
+
 import io.papermc.paper.plugin.bootstrap.BootstrapContext;
 import io.papermc.paper.plugin.bootstrap.PluginBootstrap;
-import lol.candyriya.continuum.common.command.ContinuumCommands;
-import lol.candyriya.continuum.common.ContinuumCore;
-import lol.candyriya.continuum.common.CoreContext;
-import org.incendo.cloud.execution.ExecutionCoordinator;
-import org.incendo.cloud.paper.PaperCommandManager;
+
+import java.nio.file.Path;
 
 /**
- * Paper plugin bootstrap. Runs before onEnable, so the core and commands are created
- * here: commands registered at this stage are available even in datapack functions.
+ * Loads and validates every file the backend needs before anything else runs.
  *
- * <p>The core goes into {@link PaperServices} — the bootstrapper and the plugin instances
- * are different objects, there is no other channel to pass it through.</p>
+ * <p>This stage never touches server state — it runs before the plugin object
+ * exists. Each file is seeded with bundled defaults when missing, then fully
+ * validated; on any validation failure the plugin fails to load with the
+ * complete list of problems, instead of enabling half-configured and throwing
+ * later at the first player join.</p>
+ *
+ * <p>On success the validated config, platform config and catalog-backed
+ * translator are handed to the plugin through {@link PaperServices}.</p>
  */
-public class ContinuumPaperBootstrap implements PluginBootstrap {
+public final class ContinuumPaperBootstrap implements PluginBootstrap {
 
     @Override
-    public void bootstrap(final BootstrapContext context) {
+    public void bootstrap(BootstrapContext context) {
         var logger = context.getLogger();
-        var version = context.getConfiguration().getVersion();
-        var core = ContinuumCore.bootstrap(new CoreContext(context.getDataDirectory(), logger, version));
-        PaperServices.core(core);
+        Path dataDirectory = context.getDataDirectory();
+        String version = context.getConfiguration().getVersion();
 
-        var commands = PaperCommandManager.builder()
-                .executionCoordinator(ExecutionCoordinator.simpleCoordinator())
-                .buildBootstrapped(context);
-        ContinuumCommands.register(commands, PaperSender::new, core);
-        PaperServices.commands(commands);
+        Path configPath = dataDirectory.resolve("config.yml");
+        Path platformPath = dataDirectory.resolve("platform.yml");
+        if (ConfigLoader.seedIfMissing(configPath)) {
+            logger.info("seeded the default configuration at {} — review it before production use", configPath);
+        }
+        if (PlatformConfigLoader.seedIfMissing(platformPath)) {
+            logger.info("seeded the default platform configuration at {}", platformPath);
+        }
 
-        logger.info("Commands registered at the bootstrap stage");
+        ContinuumConfig config;
+        PlatformConfig platform;
+        try {
+            config = ConfigLoader.load(configPath);
+            platform = PlatformConfigLoader.load(platformPath);
+        } catch (lol.candyriya.continuum.common.config.ConfigurationException e) {
+            // the message lists every violation found (paths and rules, never values) — print and abort the load
+            logger.error("configuration validation failed; the plugin cannot start:\n{}", e.getMessage());
+            throw e;
+        }
+
+        // bundled catalogs are part of this jar; a broken jar fails here, not at the first message
+        Translator translator = Translator.loadBundled(getClass().getClassLoader(), config.i18n());
+
+        PaperServices.stash(new PaperServices.Handoff(config, platform, translator));
+        logger.info("configuration valid: network '{}', this node '{}', default locale {}, version {}",
+                config.network().id(), config.network().serverId(), config.i18n().defaultLocale(), version);
     }
 }

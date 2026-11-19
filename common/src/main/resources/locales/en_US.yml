@@ -1,0 +1,93 @@
+# Continuum messages, en_US.
+# MiniMessage format throughout: https://docs.advntr.dev/minimessage/
+# "Args" lists the typed placeholders each message accepts.
+# Argument names match the <tag> in the template. Never pass raw input as a
+# string tag value — that is what TypedArgument.unparsed is for.
+
+player:
+  # Shown to a player while their snapshot is being restored after join/transfer.
+  # Args: none
+  loading: "<gray>Loading your data, one moment..."
+  # Shown once the restore completed and the player regained control.
+  # Args: none
+  restored: "<green>Your data has been restored."
+  # Shown when the restore failed; the player stays gate-blocked/limited until dealt with.
+  # Args: none
+  restore-failed: "<red>We couldn't restore your data. Please contact an administrator."
+  # Shown when the restore failed: the player is kicked and may rejoin.
+  # failures = consecutive failed restores for this player; limit = configured max-failures.
+  # Args: failures (number), limit (number)
+  restore-failed-kick: "<red>We couldn't restore your data. Failed restores: <failures> of <limit>. Please contact an administrator."
+
+sync:
+  error:
+    # The storage backend rejected or could not service the request.
+    # Args: none
+    database: "<red>The database is unavailable. Please try again in a moment."
+    # A newer session owns the record; this node lost the fencing race.
+    # Args: none
+    fencing: "<red>Your session was taken over by another server. Please reconnect."
+    # Snapshot exceeded the configured size cap; nothing was written.
+    # Args: none
+    too-large: "<red>Your data is too large to save. Please contact an administrator."
+    # Serialization of the snapshot failed (bad module payload, tampered bytes).
+    # Args: none
+    serialization: "<red>Your data couldn't be read or written."
+    # A schema migration was missing or produced an invalid document.
+    # Args: none
+    migration: "<red>Your data uses an unsupported format version."
+    # RabbitMQ/plugin messaging path failed; changes may not be visible network-wide.
+    # Args: none
+    messaging: "<red>Couldn't reach the network. Some changes may not sync."
+
+transfer:
+  # Transfer accepted, target notified. server = display name of the target.
+  # Args: server (text)
+  requested: "<gray>Preparing your transfer to <server>..."
+  # Player is being moved right now.
+  # Args: server (text)
+  started: "<gray>Transferring you to <server>..."
+  # Target restored successfully and committed the transfer.
+  # Args: server (text)
+  completed: "<green>Welcome to <server>."
+  # Transfer aborted before commit; player stays on the source.
+  # Args: none
+  failed: "<red>Transfer failed. You will stay on this server."
+
+admin:
+  status:
+    # Node is fully operational.
+    # Args: none
+    online: "<green>Online"
+    # Node is not reachable/running.
+    # Args: none
+    offline: "<red>Offline"
+    # Node is running with reduced capability (e.g. storage down, using cache).
+    # Args: none
+    degraded: "<yellow>Degraded"
+  reload:
+    # Config reloaded and applied cleanly.
+    # Args: none
+    success: "<green>Configuration reloaded."
+    # Reload rejected; the previous configuration stays active.
+    # Args: none
+    failed: "<red>Reload failed; keeping the previous configuration."
+
+update:
+  # Shown to admins when a newer Continuum build is available.
+  # Args: current (text) - running version, latest (text) - available version
+  available: "<gold>Continuum update available: <current> -> <latest>. Please inform your administrator."
+
+license:
+  # Tip jar license present and valid.
+  # Args: none
+  active: "<green>License valid. Thank you for supporting Continuum!"
+  # No license; the plugin runs free regardless.
+  # Args: link (text) - where to get the tip jar license
+  missing: "<yellow>No license found. Continuum runs free. To support development, grab a tip jar license: <link>"
+  # License expired; plugin keeps running, support does not.
+  # Args: none
+  expired: "<yellow>Your tip jar license has expired. Continuum keeps running; support is no longer guaranteed."
+  # License does not cover this build's version.
+  # Args: version (text) - the running version the license misses
+  version-mismatch: "<red>Your license doesn't cover this version (<version>). Continuum keeps running, but support applies to the licensed version."

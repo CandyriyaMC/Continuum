@@ -1,0 +1,23 @@
+# Continuum proxy (Velocity) settings. The shared config.yml carries the
+# network-wide knobs every node agrees on; only proxy-local tunables live here.
+#
+# Unknown keys are rejected at load; out-of-range values are rejected with a
+# report listing every violation. Keep secrets out of this file.
+
+velocity:
+  # Seconds after a player's last connect/disconnect for which the next
+  # transition is treated as the same episode instead of a fresh one. Rapid
+  # reconnects inside the window are counted as a reconnect storm and their
+  # loss-reconciliation signals are debounced. 1-600.
+  reconnect-debounce-seconds: 10
+  # Seconds the proxy waits for the target backend to report the player restored
+  # and resumed after a transfer is connected. If the report never arrives the
+  # player is disconnected with a restore-failure notice rather than left hidden
+  # in a blocked state forever. Also bounds how long a handoff may sit idle in
+  # the pre-restore phases before it is failed out. 1-120.
+  handoff-restore-timeout-seconds: 8
+  # Seconds the proxy waits for the backend to answer a capture request fired
+  # when a player switches servers (/server or forced hosts) while no transfer
+  # is in flight. The switch is refused when the answer does not come in time.
+  # 1-10.
+  capture-timeout-seconds: 3
