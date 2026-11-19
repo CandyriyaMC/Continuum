@@ -36,7 +36,7 @@ history linear). `N` never goes down or repeats while history is intact.
 
 | Workflow                         | Trigger                | Result |
 |----------------------------------|------------------------|--------|
-| `build.yml`                      | PR + push to `main`/`master`/`dev` | Required PR check (`build`). Not a release. |
+| `build.yml`                      | PR + push to `master`/`dev` (the workflow also lists a legacy `main` trigger; there is no `main` branch) | Required PR check (`build`). Not a release. |
 | `devbuild.yml`                   | Push to `dev`          | Builds `devbuild-<N>`, channel `dev`, publishes to R2 `dev/devbuild-<N>/`, posts to the dev Discord channel. No tag, no GitHub Release. |
 | `release.yml`                    | Push to `master` (+ manual dispatch) | Builds `build-<N>`, creates tag `build-<N>` and a source-only GitHub Release, publishes jars + signed manifest to R2 `release/build-<N>/`, posts to Discord. |
 | `compat-ci.yml`                  | Separate pipeline      | Compatibility smoke tests. Not covered here. |
