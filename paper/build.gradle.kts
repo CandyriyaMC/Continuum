@@ -47,6 +47,10 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
+    // test-only: the payload wire contract is pinned against the real wire conventions
+    // (snake_case, unknown properties tolerated) without putting Jackson on the main classpath
+    testImplementation(platform(libs.jackson.bom))
+    testImplementation(libs.jackson.databind)
     testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.testcontainers)
     testImplementation(libs.testcontainers.junit.jupiter)
